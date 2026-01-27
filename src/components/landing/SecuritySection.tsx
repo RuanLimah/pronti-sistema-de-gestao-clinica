@@ -18,12 +18,12 @@ const securityFeatures = [
   },
   {
     icon: FileCheck,
-    title: "Preparado para LGPD",
-    description: "Em conformidade com a Lei Geral de Proteção de Dados.",
+    title: "Conformidade LGPD",
+    description: "Em total conformidade com a Lei Geral de Proteção de Dados.",
   },
   {
     icon: Heart,
-    title: "Pensado para saúde",
+    title: "Feito para saúde",
     description: "Desenvolvido especialmente para profissionais da saúde.",
   },
 ];

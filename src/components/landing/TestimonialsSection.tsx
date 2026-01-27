@@ -2,31 +2,31 @@ import { Star, Quote } from "lucide-react";
 
 const testimonials = [
   {
-    name: "Dra. Ana Paula",
+    name: "Dra. Camila Rocha",
     role: "Psicóloga Clínica",
-    image: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=150&h=150&fit=crop&crop=face",
-    text: "Depois que comecei a usar o Cozy Practic, meu consultório ficou muito mais organizado. Economizo tempo e tenho tudo em um só lugar.",
-    rating: 5,
-  },
-  {
-    name: "Dr. Ricardo Mendes",
-    role: "Psiquiatra",
-    image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=150&h=150&fit=crop&crop=face",
-    text: "Os lembretes automáticos reduziram as faltas em 70%. O controle financeiro me deu uma visão clara do negócio.",
-    rating: 5,
-  },
-  {
-    name: "Dra. Camila Santos",
-    role: "Dentista",
     image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&h=150&fit=crop&crop=face",
-    text: "Finalmente consigo ver todo o histórico do paciente em um clique. A organização do prontuário é impecável.",
+    text: "O PRONTI transformou minha rotina. Antes eu perdia horas organizando prontuários, agora tenho tudo em um só lugar, com segurança e praticidade.",
     rating: 5,
   },
   {
-    name: "Dr. Fernando Lima",
-    role: "Clínico Geral",
+    name: "Dr. Ricardo Almeida",
+    role: "Médico - Clínica Geral",
+    image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=150&h=150&fit=crop&crop=face",
+    text: "A gestão financeira ficou muito mais clara. Consigo acompanhar recebimentos e inadimplências em tempo real. Recomendo para qualquer profissional de saúde.",
+    rating: 5,
+  },
+  {
+    name: "Dra. Fernanda Lima",
+    role: "Dentista",
+    image: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=150&h=150&fit=crop&crop=face",
+    text: "A agenda inteligente e os relatórios me ajudam a ter uma visão completa do consultório. Interface limpa e fácil de usar.",
+    rating: 5,
+  },
+  {
+    name: "Dr. Fernando Santos",
+    role: "Psiquiatra",
     image: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150&h=150&fit=crop&crop=face",
-    text: "A integração com WhatsApp mudou minha comunicação com pacientes. Profissional e eficiente.",
+    text: "O prontuário digital seguro e a auditoria de acessos me dão tranquilidade. Essencial para quem trabalha com saúde mental.",
     rating: 5,
   },
   {
@@ -51,13 +51,13 @@ export function TestimonialsSection() {
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center mb-16">
           <span className="text-emerald-600 font-semibold text-sm uppercase tracking-wide">
-            💬 Prova Social
+            ⭐ Depoimentos
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-4 mb-4">
-            Quem usa, recomenda
+            O que dizem nossos profissionais
           </h2>
           <p className="text-muted-foreground text-lg">
-            Veja o que profissionais da saúde dizem sobre o Cozy Practic
+            Veja como o PRONTI está transformando clínicas e consultórios
           </p>
         </div>
 

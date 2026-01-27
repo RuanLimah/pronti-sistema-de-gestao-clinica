@@ -14,9 +14,9 @@ const plans = [
       { text: "Agenda básica", included: true },
       { text: "Até 10 pacientes", included: true },
       { text: "10 atendimentos/mês", included: true },
-      { text: "WhatsApp", included: false },
+      { text: "Prontuário básico", included: true },
+      { text: "Financeiro", included: false },
       { text: "Relatórios", included: false },
-      { text: "Prontuário completo", included: false },
     ],
     cta: "Começar grátis",
     popular: false,
@@ -24,18 +24,18 @@ const plans = [
   {
     name: "Essencial",
     subtitle: "COMEÇAR",
-    price: "49,90",
+    price: "79",
     icon: Star,
     color: "emerald",
     features: [
       { text: "Agenda completa", included: true },
-      { text: "Até 50 pacientes ativos", included: true },
-      { text: "Prontuário digital básico", included: true },
-      { text: "Financeiro simples", included: true },
-      { text: "WhatsApp manual", included: true },
-      { text: "1 usuário", included: true },
-      { text: "WhatsApp automático", included: false },
-      { text: "Relatórios avançados", included: false },
+      { text: "Até 50 pacientes", included: true },
+      { text: "Prontuário digital", included: true },
+      { text: "Financeiro básico", included: true },
+      { text: "Relatórios simples", included: true },
+      { text: "Suporte por email", included: true },
+      { text: "Auditoria", included: false },
+      { text: "Exportação PDF", included: false },
     ],
     cta: "Assinar Essencial",
     popular: false,
@@ -43,18 +43,17 @@ const plans = [
   {
     name: "Profissional",
     subtitle: "CRESCER",
-    price: "99,90",
+    price: "149",
     icon: Crown,
     color: "teal",
     features: [
       { text: "Tudo do Essencial +", included: true },
-      { text: "WhatsApp automático", included: true },
-      { text: "Envio em massa", included: true },
-      { text: "Lembretes automáticos", included: true },
-      { text: "Prontuário completo", included: true },
-      { text: "Financeiro completo", included: true },
-      { text: "Relatórios PDF", included: true },
-      { text: "Até 300 pacientes", included: true },
+      { text: "Pacientes ilimitados", included: true },
+      { text: "Financeiro avançado", included: true },
+      { text: "Relatórios completos", included: true },
+      { text: "Exportação PDF", included: true },
+      { text: "Auditoria completa", included: true },
+      { text: "Suporte prioritário", included: true },
     ],
     cta: "Assinar Profissional",
     popular: true,
@@ -62,25 +61,25 @@ const plans = [
   {
     name: "Clínica",
     subtitle: "ESCALAR",
-    price: "199,90",
+    price: "299",
     icon: Users,
     color: "indigo",
     features: [
       { text: "Tudo do Profissional +", included: true },
       { text: "Múltiplos profissionais", included: true },
-      { text: "Controle de permissões", included: true },
-      { text: "Relatórios por profissional", included: true },
-      { text: "Financeiro consolidado", included: true },
-      { text: "Pacientes ilimitados", included: true },
-      { text: "Suporte prioritário", included: true },
+      { text: "Gestão de equipe", included: true },
+      { text: "Relatórios gerenciais", included: true },
+      { text: "API de integração", included: true },
+      { text: "Suporte dedicado", included: true },
+      { text: "Treinamento incluso", included: true },
     ],
-    cta: "Assinar Clínica",
+    cta: "Falar com vendas",
     popular: false,
   },
 ];
 
 const addOns = [
-  { name: "WhatsApp Automático Avançado", price: "29,90" },
+  { name: "WhatsApp Automático", price: "29,90" },
   { name: "Armazenamento Extra", price: "19,90" },
   { name: "Relatórios Avançados", price: "14,90" },
 ];
@@ -99,7 +98,7 @@ export function PricingSection() {
             Escolha o plano ideal para você
           </h2>
           <p className="text-muted-foreground text-lg">
-            Comece grátis e evolua conforme seu consultório cresce
+            Comece grátis e evolua conforme sua clínica cresce
           </p>
         </div>
 
@@ -118,7 +117,7 @@ export function PricingSection() {
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                   <Badge className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-1 text-sm shadow-lg">
-                    ⭐ Mais vendido
+                    ⭐ Mais popular
                   </Badge>
                 </div>
               )}
@@ -161,7 +160,7 @@ export function PricingSection() {
                     ? "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg" 
                     : "bg-slate-100 text-foreground hover:bg-slate-200"
                 }`}
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/login?mode=signup")}
               >
                 {plan.cta}
               </Button>
