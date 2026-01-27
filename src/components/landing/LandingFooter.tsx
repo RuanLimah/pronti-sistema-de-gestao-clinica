@@ -1,4 +1,4 @@
-import { Stethoscope } from "lucide-react";
+import { Brain } from "lucide-react";
 
 export function LandingFooter() {
   return (
@@ -7,10 +7,10 @@ export function LandingFooter() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <Stethoscope className="h-5 w-5 text-white" />
+              <Brain className="h-5 w-5 text-white" />
             </div>
             <span className="font-display text-xl font-bold">
-              COZY<span className="text-emerald-400">PRACTIC</span>
+              PRONTI
             </span>
           </div>
 
@@ -35,7 +35,7 @@ export function LandingFooter() {
 
         <div className="border-t border-slate-800 mt-8 pt-8 text-center">
           <p className="text-slate-500 text-sm">
-            © 2024 Cozy Practic. Todos os direitos reservados.
+            © 2024 PRONTI. Todos os direitos reservados.
           </p>
           <p className="text-slate-600 text-xs mt-2">
             Feito com ❤️ para profissionais da saúde

@@ -1,10 +1,10 @@
 import { 
   Calendar, 
   FileText, 
-  ClipboardList, 
+  Users, 
   DollarSign, 
-  MessageCircle, 
-  FileBarChart,
+  BarChart3, 
+  Shield,
   CheckCircle
 } from "lucide-react";
 
@@ -13,37 +13,37 @@ const solutions = [
     icon: Calendar,
     title: "Agenda Inteligente",
     description: "Organize consultas, bloqueie horários e tenha visão clara da sua semana.",
-    features: ["Confirmação automática", "Bloqueio de horários", "Visualização mensal/semanal"],
+    features: ["Confirmação de consultas", "Bloqueio de horários", "Visualização mensal/semanal"],
+  },
+  {
+    icon: Users,
+    title: "Gestão de Pacientes",
+    description: "Cadastro completo com histórico e informações sempre acessíveis.",
+    features: ["Cadastro completo", "Busca rápida", "Histórico de atendimentos"],
   },
   {
     icon: FileText,
-    title: "Prontuário Digital Completo",
-    description: "Evoluções, anexos de exames e histórico sempre à mão.",
-    features: ["Evoluções ilimitadas", "Upload de documentos", "Busca rápida"],
-  },
-  {
-    icon: ClipboardList,
-    title: "Histórico Clínico Organizado",
-    description: "Acesse todo o histórico do paciente em segundos.",
-    features: ["Timeline de atendimentos", "Notas importantes", "Alertas personalizados"],
+    title: "Prontuário Digital Seguro",
+    description: "Evoluções, anexos de exames e histórico protegidos com criptografia.",
+    features: ["Evoluções ilimitadas", "Upload de documentos", "Acesso controlado"],
   },
   {
     icon: DollarSign,
-    title: "Financeiro Automatizado",
+    title: "Controle Financeiro",
     description: "Controle pagamentos, inadimplência e faturamento em tempo real.",
     features: ["Relatórios financeiros", "Controle de pagamentos", "Previsão de receita"],
   },
   {
-    icon: MessageCircle,
-    title: "Comunicação via WhatsApp",
-    description: "Lembretes automáticos e comunicação profissional com pacientes.",
-    features: ["Lembretes automáticos", "Confirmação de consulta", "Envio em massa"],
+    icon: BarChart3,
+    title: "Relatórios Completos",
+    description: "Gere relatórios profissionais para análise e tomada de decisões.",
+    features: ["Relatórios personalizados", "Exportação em PDF", "Gráficos detalhados"],
   },
   {
-    icon: FileBarChart,
-    title: "Relatórios em PDF",
-    description: "Gere relatórios profissionais para você e seus pacientes.",
-    features: ["Relatórios personalizados", "Exportação em PDF", "Gráficos detalhados"],
+    icon: Shield,
+    title: "Auditoria e Segurança",
+    description: "Rastreie todas as ações no sistema com logs de auditoria completos.",
+    features: ["Logs de acesso", "Controle de permissões", "Conformidade LGPD"],
   },
 ];
 
@@ -53,13 +53,13 @@ export function SolutionsSection() {
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center mb-16">
           <span className="text-emerald-600 font-semibold text-sm uppercase tracking-wide">
-            ✅ A Solução
+            ✅ Funcionalidades
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-4 mb-4">
-            Conheça o Cozy Practic
+            Tudo que você precisa no PRONTI
           </h2>
           <p className="text-muted-foreground text-lg">
-            Ferramentas profissionais para organizar seu consultório e elevar sua prática clínica
+            Ferramentas profissionais para organizar sua clínica e elevar sua prática
           </p>
         </div>
 

@@ -1,30 +1,96 @@
-import { Brain, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Brain, Mail, Lock, Eye, EyeOff, AlertCircle, Phone, User, ArrowLeft, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/hooks/use-toast';
+import { z } from 'zod';
+
+// Schemas de validação
+const loginSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
+});
+
+const signupSchema = z.object({
+  nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
+  email: z.string().email('Email inválido'),
+  telefone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
+  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Senhas não conferem",
+  path: ["confirmPassword"],
+});
+
+type AuthMode = 'login' | 'signup' | 'forgot-password' | 'verify-email' | 'verify-phone';
 
 export default function Login() {
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get('mode') === 'signup' ? 'signup' : 'login';
+  
+  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  
+  // Login fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
+  
+  // Signup fields
+  const [nome, setNome] = useState('');
+  const [telefone, setTelefone] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // Verification fields
+  const [verificationCode, setVerificationCode] = useState('');
+  const [pendingVerification, setPendingVerification] = useState<{ email?: boolean; phone?: boolean }>({});
   
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    const modeParam = searchParams.get('mode');
+    if (modeParam === 'signup') {
+      setMode('signup');
+    }
+  }, [searchParams]);
+
+  const formatPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers.length <= 2) return `(${numbers}`;
+    if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+    if (numbers.length <= 11) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`;
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhone(e.target.value);
+    setTelefone(formatted);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
 
-    if (!email || !password) {
-      setError('Preencha todos os campos');
-      return;
+    try {
+      loginSchema.parse({ email, password });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        err.errors.forEach((e) => {
+          if (e.path[0]) errors[e.path[0] as string] = e.message;
+        });
+        setFieldErrors(errors);
+        return;
+      }
     }
 
     const success = await login(email, password);
@@ -40,6 +106,160 @@ export default function Login() {
     }
   };
 
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setFieldErrors({});
+
+    try {
+      signupSchema.parse({ nome, email, telefone, password, confirmPassword });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        err.errors.forEach((e) => {
+          if (e.path[0]) errors[e.path[0] as string] = e.message;
+        });
+        setFieldErrors(errors);
+        return;
+      }
+    }
+
+    // Simulação: após cadastro, vai para verificação de email
+    // Em produção, isso seria integrado com Supabase Auth
+    toast({
+      title: 'Cadastro iniciado',
+      description: 'Enviamos um código de verificação para seu email.',
+    });
+    setPendingVerification({ email: true });
+    setMode('verify-email');
+  };
+
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (verificationCode.length !== 6) {
+      setError('Digite o código de 6 dígitos');
+      return;
+    }
+
+    // Simulação de verificação - em produção usar Supabase Auth
+    toast({
+      title: 'Email verificado!',
+      description: 'Agora vamos verificar seu telefone.',
+    });
+    setVerificationCode('');
+    setPendingVerification({ phone: true });
+    setMode('verify-phone');
+  };
+
+  const handleVerifyPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (verificationCode.length !== 6) {
+      setError('Digite o código de 6 dígitos');
+      return;
+    }
+
+    // Simulação de verificação - em produção usar Supabase Auth
+    toast({
+      title: 'Cadastro concluído!',
+      description: 'Sua conta foi criada com sucesso. Faça login para continuar.',
+    });
+    
+    // Reset e volta para login
+    setPendingVerification({});
+    setVerificationCode('');
+    setMode('login');
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email) {
+      setError('Digite seu email');
+      return;
+    }
+
+    toast({
+      title: 'Email enviado',
+      description: 'Verifique sua caixa de entrada para redefinir sua senha.',
+    });
+    setMode('login');
+  };
+
+  const resendCode = () => {
+    toast({
+      title: 'Código reenviado',
+      description: pendingVerification.email 
+        ? 'Verifique seu email para o novo código.' 
+        : 'Verifique seu SMS para o novo código.',
+    });
+  };
+
+  const renderVerificationScreen = (type: 'email' | 'phone') => (
+    <Card className="shadow-lg">
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl font-display">
+          Verificar {type === 'email' ? 'Email' : 'Telefone'}
+        </CardTitle>
+        <CardDescription>
+          Digite o código de 6 dígitos enviado para {type === 'email' ? email : telefone}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={type === 'email' ? handleVerifyEmail : handleVerifyPhone} className="space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="code">Código de verificação</Label>
+            <Input
+              id="code"
+              type="text"
+              placeholder="000000"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="text-center text-2xl tracking-widest"
+              maxLength={6}
+            />
+          </div>
+
+          <Button type="submit" className="w-full" size="lg">
+            Verificar
+          </Button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={resendCode}
+              className="text-sm text-primary hover:underline"
+            >
+              Reenviar código
+            </button>
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => {
+              setMode('signup');
+              setPendingVerification({});
+              setVerificationCode('');
+            }}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
       <div className="w-full max-w-md animate-fade-in">
@@ -49,81 +269,311 @@ export default function Login() {
             <Brain className="h-10 w-10 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold text-white font-display">PRONTI</h1>
-          <p className="text-sidebar-foreground/70 mt-1">Sistema de Gestão para Psicólogos</p>
+          <p className="text-sidebar-foreground/70 mt-1">Sistema de gestão para clínicas</p>
         </div>
 
+        {/* Verification Screens */}
+        {mode === 'verify-email' && renderVerificationScreen('email')}
+        {mode === 'verify-phone' && renderVerificationScreen('phone')}
+
         {/* Login Card */}
-        <Card className="shadow-lg">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-display">Entrar</CardTitle>
-            <CardDescription>
-              Digite suas credenciais para acessar o sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="flex items-center gap-2 p-3 bg-destructive-light text-destructive rounded-lg text-sm">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
+        {mode === 'login' && (
+          <Card className="shadow-lg">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl font-display">Entrar</CardTitle>
+              <CardDescription>
+                Digite suas credenciais para acessar o sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
-                    autoComplete="email"
-                  />
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10"
+                      autoComplete="email"
+                    />
+                  </div>
+                  {fieldErrors.email && (
+                    <p className="text-xs text-destructive">{fieldErrors.email}</p>
+                  )}
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10"
-                    autoComplete="current-password"
-                  />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Senha</Label>
+                    <button
+                      type="button"
+                      onClick={() => setMode('forgot-password')}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 pr-10"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {fieldErrors.password && (
+                    <p className="text-xs text-destructive">{fieldErrors.password}</p>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+                  {isLoading ? 'Entrando...' : 'Entrar'}
+                </Button>
+
+                <div className="text-center">
+                  <span className="text-sm text-muted-foreground">Não tem conta? </span>
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setMode('signup')}
+                    className="text-sm text-primary hover:underline font-medium"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    Cadastre-se
                   </button>
                 </div>
-              </div>
+              </form>
 
-              <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                {isLoading ? 'Entrando...' : 'Entrar'}
-              </Button>
-            </form>
-
-            {/* Demo credentials */}
-            <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-              <p className="text-sm font-medium mb-2">Credenciais de demonstração:</p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p><strong>Admin:</strong> admin@pronti.com / admin123</p>
-                <p><strong>Médico:</strong> dra.ana@pronti.com / ana123</p>
-                <p><strong>Básico:</strong> dr.carlos@pronti.com / carlos123</p>
+              {/* Demo credentials */}
+              <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+                <p className="text-sm font-medium mb-2">Credenciais de demonstração:</p>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p><strong>Admin:</strong> admin@pronti.com / admin123</p>
+                  <p><strong>Profissional:</strong> dra.ana@pronti.com / ana123</p>
+                  <p><strong>Básico:</strong> dr.carlos@pronti.com / carlos123</p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Signup Card */}
+        {mode === 'signup' && (
+          <Card className="shadow-lg">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl font-display">Criar conta</CardTitle>
+              <CardDescription>
+                Preencha seus dados para começar
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSignup} className="space-y-4">
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="nome">Nome completo</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="nome"
+                      type="text"
+                      placeholder="Seu nome completo"
+                      value={nome}
+                      onChange={(e) => setNome(e.target.value)}
+                      className="pl-10"
+                      autoComplete="name"
+                    />
+                  </div>
+                  {fieldErrors.nome && (
+                    <p className="text-xs text-destructive">{fieldErrors.nome}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="signup-email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10"
+                      autoComplete="email"
+                    />
+                  </div>
+                  {fieldErrors.email && (
+                    <p className="text-xs text-destructive">{fieldErrors.email}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="telefone">Telefone (WhatsApp)</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="telefone"
+                      type="tel"
+                      placeholder="(11) 99999-9999"
+                      value={telefone}
+                      onChange={handlePhoneChange}
+                      className="pl-10"
+                      autoComplete="tel"
+                    />
+                  </div>
+                  {fieldErrors.telefone && (
+                    <p className="text-xs text-destructive">{fieldErrors.telefone}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="signup-password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 pr-10"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {fieldErrors.password && (
+                    <p className="text-xs text-destructive">{fieldErrors.password}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirmar senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="pl-10 pr-10"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {fieldErrors.confirmPassword && (
+                    <p className="text-xs text-destructive">{fieldErrors.confirmPassword}</p>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full" size="lg">
+                  Criar conta
+                </Button>
+
+                <div className="text-center">
+                  <span className="text-sm text-muted-foreground">Já tem conta? </span>
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-sm text-primary hover:underline font-medium"
+                  >
+                    Faça login
+                  </button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Forgot Password Card */}
+        {mode === 'forgot-password' && (
+          <Card className="shadow-lg">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl font-display">Recuperar senha</CardTitle>
+              <CardDescription>
+                Digite seu email para receber instruções de recuperação
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10"
+                      autoComplete="email"
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full" size="lg">
+                  Enviar instruções
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => setMode('login')}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Voltar ao login
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Footer */}
         <p className="text-center text-sidebar-foreground/50 text-sm mt-6">

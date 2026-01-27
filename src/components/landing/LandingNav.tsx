@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { Menu, X, Stethoscope } from "lucide-react";
+import { Menu, X, Brain } from "lucide-react";
 import { useState } from "react";
 
 export function LandingNav() {
@@ -12,10 +12,10 @@ export function LandingNav() {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <Stethoscope className="h-5 w-5 text-white" />
+            <Brain className="h-5 w-5 text-white" />
           </div>
           <span className="font-display text-xl font-bold text-foreground">
-            COZY<span className="text-emerald-600">PRACTIC</span>
+            PRONTI
           </span>
         </div>
 
@@ -23,6 +23,9 @@ export function LandingNav() {
         <div className="hidden md:flex items-center gap-6">
           <a href="#funcionalidades" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
             Funcionalidades
+          </a>
+          <a href="#dores" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
+            Dores Resolvidas
           </a>
           <a href="#planos" className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
             Planos
@@ -41,10 +44,10 @@ export function LandingNav() {
             Login
           </Button>
           <Button 
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/login?mode=signup")}
             className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25"
           >
-            Teste grátis
+            Cadastre-se
           </Button>
         </div>
 
@@ -71,6 +74,13 @@ export function LandingNav() {
               Funcionalidades
             </a>
             <a 
+              href="#dores" 
+              className="text-muted-foreground hover:text-foreground transition-colors py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Dores Resolvidas
+            </a>
+            <a 
               href="#planos" 
               className="text-muted-foreground hover:text-foreground transition-colors py-2"
               onClick={() => setMobileMenuOpen(false)}
@@ -89,10 +99,10 @@ export function LandingNav() {
                 Login
               </Button>
               <Button 
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/login?mode=signup")}
                 className="w-full bg-gradient-to-r from-emerald-500 to-teal-600"
               >
-                Teste grátis
+                Cadastre-se
               </Button>
             </div>
           </div>

@@ -2,47 +2,47 @@ import {
   FolderX, 
   FileQuestion, 
   Calculator, 
-  BellOff, 
+  History, 
   FileX2, 
-  Clock 
+  ShieldAlert 
 } from "lucide-react";
 
 const painPoints = [
   {
     icon: FolderX,
     title: "Falta de organização",
-    description: "Consultas perdidas, horários confusos e agenda descontrolada.",
+    description: "Consultas perdidas, horários confusos e agenda descontrolada prejudicam sua rotina.",
   },
   {
     icon: FileQuestion,
-    title: "Prontuários espalhados",
-    description: "Informações em papéis, planilhas e lugares diferentes.",
+    title: "Prontuários inseguros",
+    description: "Informações em papéis, planilhas ou sistemas sem proteção adequada.",
+  },
+  {
+    icon: History,
+    title: "Perda de histórico",
+    description: "Dificuldade em acessar atendimentos anteriores e evolução dos pacientes.",
   },
   {
     icon: Calculator,
-    title: "Financeiro confuso",
-    description: "Sem controle de recebimentos, pagamentos e inadimplências.",
-  },
-  {
-    icon: BellOff,
-    title: "Esquecimento de consultas",
-    description: "Pacientes faltando por não receber lembretes adequados.",
+    title: "Controle financeiro manual",
+    description: "Sem controle de recebimentos, pagamentos e inadimplências em tempo real.",
   },
   {
     icon: FileX2,
     title: "Falta de relatórios claros",
-    description: "Impossível ter visão do negócio sem dados organizados.",
+    description: "Impossível ter visão do negócio e tomar decisões sem dados organizados.",
   },
   {
-    icon: Clock,
-    title: "Perda de tempo",
-    description: "Tarefas manuais repetitivas que poderiam ser automatizadas.",
+    icon: ShieldAlert,
+    title: "Sem rastreabilidade",
+    description: "Falta de auditoria e segurança nos acessos aos dados dos pacientes.",
   },
 ];
 
 export function PainPointsSection() {
   return (
-    <section className="py-20 md:py-28 bg-gradient-to-b from-slate-100 to-slate-50">
+    <section id="dores" className="py-20 md:py-28 bg-gradient-to-b from-slate-100 to-slate-50">
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center mb-16">
           <span className="text-rose-500 font-semibold text-sm uppercase tracking-wide">
@@ -52,7 +52,7 @@ export function PainPointsSection() {
             Você enfrenta esses problemas?
           </h2>
           <p className="text-muted-foreground text-lg">
-            A rotina de um consultório pode ser caótica sem as ferramentas certas
+            A rotina de uma clínica pode ser caótica sem as ferramentas certas
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export function PainPointsSection() {
 
         <div className="text-center mt-12">
           <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-6 py-3 rounded-full font-medium">
-            ✨ O Cozy Practic resolve todos esses problemas
+            ✨ O PRONTI resolve todos esses problemas
           </div>
         </div>
       </div>
