@@ -13,9 +13,9 @@ import {
 } from "lucide-react";
 
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
-import { UserManagement } from "@/components/admin/UserManagement";
+import { ClientManagement } from "@/components/admin/ClientManagement";
 import { PlanManagement } from "@/components/admin/PlanManagement";
-import { AddonManagement } from "@/components/admin/AddonManagement";
+import { AddonCentralManager } from "@/components/admin/AddonCentralManager";
 import { AuditViewer } from "@/components/admin/AuditViewer";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -30,7 +30,7 @@ export default function Admin() {
   return (
     <DashboardLayout 
       title="Painel Administrativo" 
-      subtitle="Gestão completa de profissionais, planos e métricas do negócio"
+      subtitle="Gestão completa de clientes, planos e add-ons do sistema"
     >
       <div className="space-y-6 animate-fade-in">
         {/* Header with Shield Icon */}
@@ -42,8 +42,8 @@ export default function Admin() {
             <h2 className="font-semibold">Área Administrativa</h2>
             <p className="text-sm text-muted-foreground">
               {isSuperAdmin 
-                ? 'Controle total: usuários, planos, add-ons e auditoria'
-                : 'Gestão de usuários, planos e métricas'
+                ? 'Controle total: clientes, planos, add-ons e auditoria'
+                : 'Gestão de clientes, planos e métricas'
               }
             </p>
           </div>
@@ -61,11 +61,11 @@ export default function Admin() {
             </TabsTrigger>
             
             <TabsTrigger 
-              value="users" 
+              value="clients" 
               className="gap-2 data-[state=active]:bg-background"
             >
               <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Profissionais</span>
+              <span className="hidden sm:inline">Clientes</span>
             </TabsTrigger>
             
             <TabsTrigger 
@@ -100,9 +100,9 @@ export default function Admin() {
             <AdminDashboard />
           </TabsContent>
 
-          {/* Users Tab */}
-          <TabsContent value="users" className="mt-0">
-            <UserManagement />
+          {/* Clients Tab */}
+          <TabsContent value="clients" className="mt-0">
+            <ClientManagement />
           </TabsContent>
 
           {/* Plans Tab */}
@@ -112,7 +112,7 @@ export default function Admin() {
 
           {/* Add-ons Tab */}
           <TabsContent value="addons" className="mt-0">
-            <AddonManagement />
+            <AddonCentralManager />
           </TabsContent>
 
           {/* Audit Tab (Super Admin Only) */}
