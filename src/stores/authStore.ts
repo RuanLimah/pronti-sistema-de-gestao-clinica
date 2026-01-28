@@ -2,12 +2,19 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, Plan, Subscription, FeatureFlags, PlanType } from '@/types';
 
+// Roles do sistema
+export type SystemRole = 'admin' | 'cliente';
+
 interface AuthStore {
   user: User | null;
   plan: Plan | null;
   subscription: Subscription | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  
+  // Role do sistema
+  systemRole: SystemRole | null;
+  clienteId: string | null; // ID do cliente quando role = 'cliente'
   
   // Actions
   login: (email: string, password: string) => Promise<boolean>;
@@ -18,6 +25,11 @@ interface AuthStore {
   getFeatureFlags: () => FeatureFlags;
   hasFeature: (feature: keyof FeatureFlags) => boolean;
   checkPlanLimit: (feature: string, currentCount?: number) => { allowed: boolean; message?: string };
+  
+  // Role checks
+  isAdmin: () => boolean;
+  isCliente: () => boolean;
+  getClienteId: () => string | null;
 }
 
 // Planos mock para desenvolvimento
@@ -76,7 +88,7 @@ const mockPlans: Record<PlanType, Plan> = {
 };
 
 // Usuários mock para desenvolvimento
-const mockUsers: Record<string, { user: User; password: string; planType: PlanType }> = {
+const mockUsers: Record<string, { user: User; password: string; planType: PlanType; systemRole: SystemRole; clienteId?: string }> = {
   'admin@pronti.com': {
     user: {
       id: 'admin-1',
@@ -88,6 +100,20 @@ const mockUsers: Record<string, { user: User; password: string; planType: PlanTy
     },
     password: 'admin123',
     planType: 'premium',
+    systemRole: 'admin',
+  },
+  'super@pronti.com': {
+    user: {
+      id: 'super-1',
+      nome: 'Super Admin',
+      email: 'super@pronti.com',
+      tipo: 'admin',
+      status: 'ativo',
+      criadoEm: new Date(),
+    },
+    password: 'super123',
+    planType: 'premium',
+    systemRole: 'admin',
   },
   'dra.ana@pronti.com': {
     user: {
@@ -101,6 +127,8 @@ const mockUsers: Record<string, { user: User; password: string; planType: PlanTy
     },
     password: 'ana123',
     planType: 'profissional',
+    systemRole: 'cliente',
+    clienteId: 'cliente-1',
   },
   'dr.carlos@pronti.com': {
     user: {
@@ -114,6 +142,8 @@ const mockUsers: Record<string, { user: User; password: string; planType: PlanTy
     },
     password: 'carlos123',
     planType: 'basico',
+    systemRole: 'cliente',
+    clienteId: 'cliente-2',
   },
 };
 
@@ -125,6 +155,8 @@ export const useAuthStore = create<AuthStore>()(
       subscription: null,
       isAuthenticated: false,
       isLoading: false,
+      systemRole: null,
+      clienteId: null,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -161,6 +193,8 @@ export const useAuthStore = create<AuthStore>()(
           subscription,
           isAuthenticated: true,
           isLoading: false,
+          systemRole: userData.systemRole,
+          clienteId: userData.clienteId || null,
         });
 
         return true;
@@ -172,12 +206,18 @@ export const useAuthStore = create<AuthStore>()(
           plan: null,
           subscription: null,
           isAuthenticated: false,
+          systemRole: null,
+          clienteId: null,
         });
       },
 
       setUser: (user) => set({ user }),
       setPlan: (plan) => set({ plan }),
       setSubscription: (subscription) => set({ subscription }),
+      
+      isAdmin: () => get().systemRole === 'admin',
+      isCliente: () => get().systemRole === 'cliente',
+      getClienteId: () => get().clienteId,
 
       getFeatureFlags: () => {
         const { plan } = get();
