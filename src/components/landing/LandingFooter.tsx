@@ -9,7 +9,7 @@ export function LandingFooter() {
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
               <Brain className="h-5 w-5 text-white" />
             </div>
-            <span className="font-display text-xl font-bold">
+            <span className="font-display text-xl font-bold text-white">
               PRONTI
             </span>
           </div>

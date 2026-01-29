@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
@@ -34,11 +35,12 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
+      <ThemeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
 
-        <Routes>
+          <Routes>
           {/* Landing Page */}
           <Route path="/" element={<Landing />} />
           
@@ -139,6 +141,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
