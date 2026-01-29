@@ -7,23 +7,23 @@ export function HeroSection() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative pt-24 pb-16 md:pt-32 md:pb-24 overflow-hidden bg-gradient-to-b from-slate-50 to-white">
+    <section className="relative pt-24 pb-16 md:pt-32 md:pb-24 overflow-hidden bg-gradient-to-b from-secondary/50 to-background dark:from-secondary/20 dark:to-background">
       {/* Background Elements */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute top-20 left-1/4 w-72 h-72 bg-emerald-100 rounded-full blur-3xl opacity-60" />
-        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-teal-100 rounded-full blur-3xl opacity-40" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-emerald-50 to-transparent rounded-full opacity-50" />
+        <div className="absolute top-20 left-1/4 w-72 h-72 bg-primary/10 rounded-full blur-3xl opacity-60" />
+        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl opacity-40" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-primary/5 to-transparent rounded-full opacity-50" />
       </div>
 
       <div className="container mx-auto px-4">
         <div className="max-w-5xl mx-auto text-center">
-          <Badge className="mb-6 px-4 py-2 text-sm bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+          <Badge className="mb-6 px-4 py-2 text-sm bg-primary/10 text-primary border-primary/20 hover:bg-primary/15">
             ✨ Sistema completo para clínicas e consultórios
           </Badge>
 
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight">
             Organize sua clínica com{" "}
-            <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
               produtividade, segurança e simplicidade.
             </span>
           </h1>
@@ -46,7 +46,7 @@ export function HeroSection() {
               variant="outline" 
               size="lg"
               onClick={() => navigate("/login")}
-              className="text-lg px-8 py-6 border-2 hover:bg-slate-50"
+              className="text-lg px-8 py-6 border-2 hover:bg-secondary"
             >
               Login
             </Button>
@@ -73,7 +73,7 @@ export function HeroSection() {
             </div>
             
             {/* App Preview Content */}
-            <div className="p-4 md:p-6 bg-slate-50">
+            <div className="p-4 md:p-6 bg-card">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
                   { icon: Calendar, label: "Agenda", color: "bg-emerald-500" },
@@ -83,12 +83,12 @@ export function HeroSection() {
                 ].map((item, i) => (
                   <div 
                     key={i} 
-                    className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex flex-col items-center gap-2 hover:shadow-md transition-shadow"
+                    className="bg-background rounded-xl p-4 shadow-sm border border-border flex flex-col items-center gap-2 hover:shadow-md transition-shadow"
                   >
                     <div className={`${item.color} p-3 rounded-lg text-white`}>
                       <item.icon className="h-5 w-5" />
                     </div>
-                    <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                    <span className="text-sm font-medium text-foreground">{item.label}</span>
                   </div>
                 ))}
               </div>
@@ -96,26 +96,26 @@ export function HeroSection() {
           </div>
 
           {/* Floating elements */}
-          <div className="hidden md:block absolute -left-8 top-1/3 bg-white rounded-xl shadow-xl p-4 border border-slate-100 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+          <div className="hidden md:block absolute -left-8 top-1/3 bg-card rounded-xl shadow-xl p-4 border border-border animate-fade-in" style={{ animationDelay: "0.3s" }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-emerald-600" />
+              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Próxima consulta</p>
-                <p className="text-sm font-semibold">14:00 - Maria Silva</p>
+                <p className="text-sm font-semibold text-foreground">14:00 - Maria Silva</p>
               </div>
             </div>
           </div>
 
-          <div className="hidden md:block absolute -right-8 top-1/2 bg-white rounded-xl shadow-xl p-4 border border-slate-100 animate-fade-in" style={{ animationDelay: "0.5s" }}>
+          <div className="hidden md:block absolute -right-8 top-1/2 bg-card rounded-xl shadow-xl p-4 border border-border animate-fade-in" style={{ animationDelay: "0.5s" }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                <Brain className="h-5 w-5 text-teal-600" />
+              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                <Brain className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Prontuário seguro</p>
-                <p className="text-sm font-semibold text-teal-600">✓ Dados protegidos</p>
+                <p className="text-sm font-semibold text-primary">✓ Dados protegidos</p>
               </div>
             </div>
           </div>
