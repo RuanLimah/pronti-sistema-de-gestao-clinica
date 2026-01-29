@@ -77,7 +77,13 @@ const defaultFilters: Filters = {
 export default function Pacientes() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { getPacientesByMedico, addPaciente, deletePaciente, togglePacienteStatus } = useDataStore();
+  const { getPacientesByMedico, addPaciente, deletePaciente, togglePacienteStatus, fetchPacientes } = useDataStore();
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchPacientes(user.id);
+    }
+  }, [user?.id, fetchPacientes]);
 
   // Estados do modal de novo paciente
   const [criandoPaciente, setCriandoPaciente] = useState(false);
@@ -101,10 +107,16 @@ export default function Pacientes() {
   const [pacienteToDelete, setPacienteToDelete] = useState<Paciente | null>(null);
 
   // Buscar pacientes do médico logado
+  useEffect(() => {
+    if (user?.id) {
+      fetchPacientes(user.id);
+    }
+  }, [user?.id, fetchPacientes]);
+
   const pacientes = useMemo(() => {
     if (!user?.id) return [];
     return getPacientesByMedico(user.id);
-  }, [user?.id, getPacientesByMedico]);
+  }, [user?.id, getPacientesByMedico, getPacientesByMedico(user?.id || '').length]); // Trigger update when length changes
 
   // Aplicar filtros + busca
   const filteredPatients = useMemo(() => {

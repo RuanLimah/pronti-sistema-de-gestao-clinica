@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,10 +37,12 @@ import { exportProntuarioPdf } from "@/lib/pdfExport";
 import { EvolucoesList } from "@/components/prontuario/EvolucoesList";
 import { ExamesList } from "@/components/prontuario/ExamesList";
 import { ExameUploadModal } from "@/components/prontuario/ExameUploadModal";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function ProntuarioPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   
   const { 
     getPacienteById, 
@@ -53,7 +55,21 @@ export default function ProntuarioPage() {
     getExamesByPaciente,
     addExame,
     deleteExame,
+    fetchProntuarios,
+    fetchExames,
+    fetchAtendimentos,
+    fetchPacientes
   } = useDataStore();
+
+  useEffect(() => {
+    if (user?.id && id) {
+      // Ensure patient data is loaded
+      fetchPacientes(user.id);
+      fetchProntuarios(id);
+      fetchExames(id);
+      fetchAtendimentos(user.id);
+    }
+  }, [user?.id, id, fetchProntuarios, fetchExames, fetchAtendimentos, fetchPacientes]);
 
   const paciente = getPacienteById(id || "");
   

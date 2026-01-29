@@ -17,4 +17,7 @@ export interface AppointmentRepository {
   approve(id: string): Promise<void>;
   reject(id: string): Promise<void>;
   cancel(id: string): Promise<void>;
+  delete(id: string): Promise<void>;
+  update(id: string, data: Partial<CreateAppointmentDTO>): Promise<Appointment>;
+  markReminderSent(id: string): Promise<void>;
 }

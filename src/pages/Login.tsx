@@ -124,14 +124,21 @@ export default function Login() {
       }
     }
 
-    // Simulação: após cadastro, vai para verificação de email
-    // Em produção, isso seria integrado com Supabase Auth
+    const { success, error: signupError } = await signup(email, password, nome, telefone);
+
+    if (!success) {
+      setError(signupError || 'Erro ao criar conta');
+      return;
+    }
+
     toast({
-      title: 'Cadastro iniciado',
-      description: 'Enviamos um código de verificação para seu email.',
+      title: 'Conta criada!',
+      description: 'Verifique seu email para confirmar o cadastro.',
     });
-    setPendingVerification({ email: true });
-    setMode('verify-email');
+    // In a real flow with email confirmation, we might stop here or show a "Check email" screen.
+    // Since Supabase usually requires email confirmation by default, we tell them to check email.
+    // If auto-confirm is on, they could login immediately, but let's assume standard flow.
+    setMode('login');
   };
 
   const handleVerifyEmail = async (e: React.FormEvent) => {

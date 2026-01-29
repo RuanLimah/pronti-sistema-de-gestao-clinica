@@ -1,14 +1,17 @@
-export type NotificationType =
-  | "appointment_pending"
-  | "appointment_approved"
-  | "appointment_rejected"
-  | "appointment_cancelled"
-  | "payment_confirmed";
+export type NotificationType = 
+  | 'sistema' 
+  | 'agendamento' 
+  | 'pagamento' 
+  | 'lembrete';
 
 export interface Notification {
   id: string;
+  client_id: string;
   type: NotificationType;
+  title: string;
   message: string;
-  createdAt: Date;
   read: boolean;
+  link?: string;
+  created_at: Date;
+  updated_at: Date;
 }

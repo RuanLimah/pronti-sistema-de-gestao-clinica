@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, Search, Menu, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ export function Header({ title, subtitle, onMenuClick, showMenuButton }: HeaderP
     getAtendimentosByMedico, 
     getNotificacoesNaoLidas,
     getConfiguracoesByMedico,
+    fetchNotificacoes,
   } = useDataStore();
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -46,6 +47,12 @@ export function Header({ title, subtitle, onMenuClick, showMenuButton }: HeaderP
   const pacientes = getPacientesByMedico(medicoId);
   const atendimentos = getAtendimentosByMedico(medicoId);
   const config = getConfiguracoesByMedico(medicoId);
+
+  useEffect(() => {
+    if (medicoId) {
+      fetchNotificacoes(medicoId);
+    }
+  }, [medicoId, fetchNotificacoes]);
 
   // Foto do usuário - priorizar config.avatarUrl, depois user.foto
   const avatarUrl = config?.avatarUrl || user?.foto;

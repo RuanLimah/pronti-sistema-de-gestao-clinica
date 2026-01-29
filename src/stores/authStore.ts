@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, Plan, Subscription, FeatureFlags, PlanType } from '@/types';
+import { User, Plan, Subscription, FeatureFlags, PlanType, UserRole } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 // Roles do sistema
 export type SystemRole = 'admin' | 'cliente';
@@ -18,134 +19,20 @@ interface AuthStore {
   
   // Actions
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  setUser: (user: User | null) => void;
-  setPlan: (plan: Plan | null) => void;
-  setSubscription: (subscription: Subscription | null) => void;
-  getFeatureFlags: () => FeatureFlags;
-  hasFeature: (feature: keyof FeatureFlags) => boolean;
-  checkPlanLimit: (feature: string, currentCount?: number) => { allowed: boolean; message?: string };
+  signup: (email: string, password: string, name: string, phone: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  checkSession: () => Promise<void>;
   
   // Role checks
   isAdmin: () => boolean;
   isCliente: () => boolean;
   getClienteId: () => string | null;
+  
+  // Feature checks
+  getFeatureFlags: () => FeatureFlags;
+  hasFeature: (feature: keyof FeatureFlags) => boolean;
+  checkPlanLimit: (feature: string, currentCount?: number) => { allowed: boolean; message?: string };
 }
-
-// Planos mock para desenvolvimento
-const mockPlans: Record<PlanType, Plan> = {
-  basico: {
-    id: '1',
-    nome: 'Básico',
-    tipo: 'basico',
-    valor: 49.90,
-    ativo: true,
-    recursos: {
-      maxPacientes: 20,
-      agendaCompleta: false,
-      financeiroAvancado: false,
-      whatsappAutomatico: false,
-      relatoriosFiltros: false,
-      exportacaoPdf: false,
-      automacoesCompletas: false,
-      relatoriosAvancados: false,
-    },
-  },
-  profissional: {
-    id: '2',
-    nome: 'Profissional',
-    tipo: 'profissional',
-    valor: 99.90,
-    ativo: true,
-    recursos: {
-      maxPacientes: null,
-      agendaCompleta: true,
-      financeiroAvancado: true,
-      whatsappAutomatico: true,
-      relatoriosFiltros: true,
-      exportacaoPdf: true,
-      automacoesCompletas: false,
-      relatoriosAvancados: false,
-    },
-  },
-  premium: {
-    id: '3',
-    nome: 'Premium',
-    tipo: 'premium',
-    valor: 199.90,
-    ativo: true,
-    recursos: {
-      maxPacientes: null,
-      agendaCompleta: true,
-      financeiroAvancado: true,
-      whatsappAutomatico: true,
-      relatoriosFiltros: true,
-      exportacaoPdf: true,
-      automacoesCompletas: true,
-      relatoriosAvancados: true,
-    },
-  },
-};
-
-// Usuários mock para desenvolvimento
-const mockUsers: Record<string, { user: User; password: string; planType: PlanType; systemRole: SystemRole; clienteId?: string }> = {
-  'admin@pronti.com': {
-    user: {
-      id: 'admin-1',
-      nome: 'Administrador',
-      email: 'admin@pronti.com',
-      tipo: 'admin',
-      status: 'ativo',
-      criadoEm: new Date(),
-    },
-    password: 'admin123',
-    planType: 'premium',
-    systemRole: 'admin',
-  },
-  'super@pronti.com': {
-    user: {
-      id: 'super-1',
-      nome: 'Super Admin',
-      email: 'super@pronti.com',
-      tipo: 'admin',
-      status: 'ativo',
-      criadoEm: new Date(),
-    },
-    password: 'super123',
-    planType: 'premium',
-    systemRole: 'admin',
-  },
-  'dra.ana@pronti.com': {
-    user: {
-      id: 'medico-1',
-      nome: 'Dra. Ana Silva',
-      email: 'dra.ana@pronti.com',
-      tipo: 'medico',
-      status: 'ativo',
-      crp: '06/123456',
-      criadoEm: new Date(),
-    },
-    password: 'ana123',
-    planType: 'profissional',
-    systemRole: 'cliente',
-    clienteId: 'cliente-1',
-  },
-  'dr.carlos@pronti.com': {
-    user: {
-      id: 'medico-2',
-      nome: 'Dr. Carlos Mendes',
-      email: 'dr.carlos@pronti.com',
-      tipo: 'medico',
-      status: 'ativo',
-      crp: '06/789012',
-      criadoEm: new Date(),
-    },
-    password: 'carlos123',
-    planType: 'basico',
-    systemRole: 'cliente',
-    clienteId: 'cliente-2',
-  },
-};
 
 export const useAuthStore = create<AuthStore>()(
   persist(
@@ -161,46 +48,150 @@ export const useAuthStore = create<AuthStore>()(
       login: async (email: string, password: string) => {
         set({ isLoading: true });
         
-        // Simula delay de rede
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const userData = mockUsers[email.toLowerCase()];
-        
-        if (!userData || userData.password !== password) {
+        try {
+          const { data: { session }, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
+          if (error || !session) {
+            console.error('Login error:', error);
+            set({ isLoading: false });
+            return false;
+          }
+
+          // Fetch profile and client data
+          const userId = session.user.id;
+          
+          // 1. Fetch Profile
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+          if (profileError) {
+             console.error('Profile fetch error:', profileError);
+             // Handle case where profile might not exist yet (though trigger should create it)
+          }
+
+          const systemRole = (profile?.role === 'admin' ? 'admin' : 'cliente') as SystemRole;
+          
+          // 2. Fetch Client Data if role is client
+          let clientData = null;
+          let planData = null;
+          let subscriptionData: Subscription | null = null;
+
+          if (systemRole === 'cliente') {
+            const { data: client, error: clientError } = await supabase
+              .from('clients')
+              .select(`
+                *,
+                plans (*)
+              `)
+              .eq('id', userId)
+              .single();
+              
+            if (client) {
+              clientData = client;
+              const dbPlan = client.plans;
+              
+              if (dbPlan) {
+                 planData = {
+                    id: dbPlan.id,
+                    nome: dbPlan.name,
+                    tipo: dbPlan.type as PlanType,
+                    valor: dbPlan.price,
+                    ativo: dbPlan.active,
+                    recursos: {
+                      maxPacientes: dbPlan.limits?.max_patients ?? null,
+                      // Map other features based on 'features' array or defaults
+                      agendaCompleta: dbPlan.features?.includes('agenda_completa') ?? false,
+                      financeiroAvancado: dbPlan.features?.includes('financeiro') ?? false,
+                      whatsappAutomatico: dbPlan.features?.includes('whatsapp') ?? false,
+                      relatoriosFiltros: true, // Default or check feature list
+                      exportacaoPdf: true,
+                      automacoesCompletas: dbPlan.features?.includes('automacoes') ?? false,
+                      relatoriosAvancados: dbPlan.features?.includes('relatorios_avancados') ?? false,
+                    }
+                 } as Plan;
+
+                 subscriptionData = {
+                   id: `sub-${client.id}`,
+                   medicoId: client.id,
+                   planoId: dbPlan.id,
+                   plano: planData,
+                   status: client.status === 'active' ? 'ativa' : 'cancelada', // Map status correctly
+                   dataInicio: new Date(client.created_at),
+                   criadoEm: new Date(client.created_at),
+                 };
+              }
+            }
+          } else {
+             // Admin doesn't have a plan usually, or has a 'god mode' plan
+             // For now leaving null or setting a dummy admin plan
+          }
+
+          const appUser: User = {
+            id: userId,
+            nome: profile?.full_name || session.user.user_metadata.full_name || email,
+            email: email,
+            tipo: systemRole === 'admin' ? 'admin' : 'medico', // Map to UserRole
+            status: 'ativo',
+            criadoEm: new Date(session.user.created_at),
+          };
+
+          set({
+            user: appUser,
+            plan: planData,
+            subscription: subscriptionData,
+            isAuthenticated: true,
+            isLoading: false,
+            systemRole: systemRole,
+            clienteId: systemRole === 'cliente' ? userId : null,
+          });
+
+          return true;
+
+        } catch (err) {
+          console.error('Unexpected login error:', err);
           set({ isLoading: false });
           return false;
         }
-
-        if (userData.user.status === 'bloqueado') {
-          set({ isLoading: false });
-          return false;
-        }
-
-        const plan = mockPlans[userData.planType];
-        const subscription: Subscription = {
-          id: `sub-${userData.user.id}`,
-          medicoId: userData.user.id,
-          planoId: plan.id,
-          plano: plan,
-          status: 'ativa',
-          dataInicio: new Date(),
-          criadoEm: new Date(),
-        };
-
-        set({
-          user: userData.user,
-          plan,
-          subscription,
-          isAuthenticated: true,
-          isLoading: false,
-          systemRole: userData.systemRole,
-          clienteId: userData.clienteId || null,
-        });
-
-        return true;
       },
 
-      logout: () => {
+      signup: async (email, password, name, phone) => {
+        set({ isLoading: true });
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: name,
+                phone: phone,
+              },
+            },
+          });
+
+          if (error) {
+            set({ isLoading: false });
+            return { success: false, error: error.message };
+          }
+          
+          // If auto-confirm is off, user can't login yet. 
+          // Assuming auto-confirm is on for dev, or user needs to check email.
+          set({ isLoading: false });
+          return { success: true };
+
+        } catch (err) {
+           set({ isLoading: false });
+           return { success: false, error: 'Erro inesperado' };
+        }
+      },
+
+      logout: async () => {
+        await supabase.auth.signOut();
         set({
           user: null,
           plan: null,
@@ -211,9 +202,119 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      setUser: (user) => set({ user }),
-      setPlan: (plan) => set({ plan }),
-      setSubscription: (subscription) => set({ subscription }),
+      checkSession: async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+           const { user } = get();
+           // If we have a session but no user data in store (or we want to refresh)
+           if (!user || !get().isAuthenticated) {
+             // We need to fetch user data similar to login
+             // We can extract the logic or just re-implement a fetch here
+             // For simplicity/safety, let's reuse a fetch logic
+             // But we can't call 'login' because it requires password
+             
+             // Reuse fetch logic:
+             try {
+                const userId = session.user.id;
+                const email = session.user.email || '';
+                
+                // 1. Fetch Profile
+                const { data: profile, error: profileError } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', userId)
+                  .single();
+
+                if (profileError) console.error('Profile fetch error:', profileError);
+
+                const systemRole = (profile?.role === 'admin' ? 'admin' : 'cliente') as SystemRole;
+                
+                // 2. Fetch Client Data
+                let clientData = null;
+                let planData = null;
+                let subscriptionData: Subscription | null = null;
+
+                if (systemRole === 'cliente') {
+                  const { data: client } = await supabase
+                    .from('clients')
+                    .select(`*, plans (*)`)
+                    .eq('id', userId)
+                    .single();
+                    
+                  if (client) {
+                    clientData = client;
+                    const dbPlan = client.plans;
+                    
+                    if (dbPlan) {
+                       planData = {
+                          id: dbPlan.id,
+                          nome: dbPlan.name,
+                          tipo: dbPlan.type as PlanType,
+                          valor: dbPlan.price,
+                          ativo: dbPlan.active,
+                          recursos: {
+                            maxPacientes: dbPlan.limits?.max_patients ?? null,
+                            agendaCompleta: dbPlan.features?.includes('agenda_completa') ?? false,
+                            financeiroAvancado: dbPlan.features?.includes('financeiro') ?? false,
+                            whatsappAutomatico: dbPlan.features?.includes('whatsapp') ?? false,
+                            relatoriosFiltros: true,
+                            exportacaoPdf: true,
+                            automacoesCompletas: dbPlan.features?.includes('automacoes') ?? false,
+                            relatoriosAvancados: dbPlan.features?.includes('relatorios_avancados') ?? false,
+                          }
+                       } as Plan;
+
+                       subscriptionData = {
+                         id: `sub-${client.id}`,
+                         medicoId: client.id,
+                         planoId: dbPlan.id,
+                         plano: planData,
+                         status: client.status === 'active' ? 'ativa' : 'cancelada',
+                         dataInicio: new Date(client.created_at),
+                         criadoEm: new Date(client.created_at),
+                       };
+                    }
+                  }
+                }
+
+                const appUser: User = {
+                  id: userId,
+                  nome: profile?.full_name || session.user.user_metadata.full_name || email,
+                  email: email,
+                  tipo: systemRole === 'admin' ? 'admin' : 'medico',
+                  status: 'ativo',
+                  criadoEm: new Date(session.user.created_at),
+                };
+
+                set({
+                  user: appUser,
+                  plan: planData,
+                  subscription: subscriptionData,
+                  isAuthenticated: true,
+                  isLoading: false,
+                  systemRole: systemRole,
+                  clienteId: systemRole === 'cliente' ? userId : null,
+                });
+             } catch (e) {
+               console.error("Error restoring session:", e);
+               // Force logout if error?
+             }
+           }
+        } else {
+           // if no session, ensure logout state
+           if (get().isAuthenticated) {
+              set({
+                user: null,
+                plan: null,
+                subscription: null,
+                isAuthenticated: false,
+                systemRole: null,
+                clienteId: null,
+              });
+           }
+        }
+      },
       
       isAdmin: () => get().systemRole === 'admin',
       isCliente: () => get().systemRole === 'cliente',
@@ -270,35 +371,26 @@ export const useAuthStore = create<AuthStore>()(
             if (currentCount >= plan.recursos.maxPacientes) {
               return { 
                 allowed: false, 
-                message: `Limite de ${plan.recursos.maxPacientes} pacientes atingido. Faça upgrade para o plano Profissional.` 
+                message: `Limite de ${plan.recursos.maxPacientes} pacientes atingido. Faça upgrade.` 
               };
             }
             return { allowed: true };
 
           case 'whatsapp_auto':
             if (!plan.recursos.whatsappAutomatico) {
-              return { 
-                allowed: false, 
-                message: 'Recurso disponível no plano Profissional ou superior.' 
-              };
+              return { allowed: false, message: 'Recurso indisponível no plano atual.' };
             }
             return { allowed: true };
 
           case 'export_pdf':
             if (!plan.recursos.exportacaoPdf) {
-              return { 
-                allowed: false, 
-                message: 'Exportação PDF disponível no plano Profissional ou superior.' 
-              };
+              return { allowed: false, message: 'Recurso indisponível no plano atual.' };
             }
             return { allowed: true };
 
           case 'automacoes':
             if (!plan.recursos.automacoesCompletas) {
-              return { 
-                allowed: false, 
-                message: 'Automações completas disponíveis no plano Premium.' 
-              };
+              return { allowed: false, message: 'Recurso indisponível no plano atual.' };
             }
             return { allowed: true };
 
@@ -314,6 +406,8 @@ export const useAuthStore = create<AuthStore>()(
         plan: state.plan,
         subscription: state.subscription,
         isAuthenticated: state.isAuthenticated,
+        systemRole: state.systemRole,
+        clienteId: state.clienteId,
       }),
     }
   )

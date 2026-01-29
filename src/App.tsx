@@ -20,9 +20,18 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Prontuario from "./pages/pacientes/prontuario";
 
+import { useEffect } from "react";
+import { useAuthStore } from "./stores/authStore";
+
 const queryClient = new QueryClient();
 
 export default function App() {
+  const { checkSession } = useAuthStore();
+
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

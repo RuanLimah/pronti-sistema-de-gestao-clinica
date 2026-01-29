@@ -12,18 +12,22 @@ import { useAuthStore } from "@/stores/authStore";
 export default function Dashboard() {
   const { user } = useAuthStore();
   const { 
-    inicializarDadosMock, 
+    fetchPacientes, 
+    fetchAtendimentos,
+    fetchPagamentos,
     getEstatisticasDashboard
   } = useDataStore();
 
   const medicoId = user?.id || "";
 
-  // Inicializar dados mock quando o usuário logar
+  // Inicializar dados reais quando o usuário logar
   useEffect(() => {
     if (medicoId) {
-      inicializarDadosMock(medicoId);
+      fetchPacientes(medicoId);
+      fetchAtendimentos(medicoId);
+      fetchPagamentos(medicoId);
     }
-  }, [medicoId, inicializarDadosMock]);
+  }, [medicoId, fetchPacientes, fetchAtendimentos, fetchPagamentos]);
 
   const stats = getEstatisticasDashboard(medicoId);
 
