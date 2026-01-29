@@ -70,6 +70,12 @@
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(180 20% 98%));
     --gradient-hero: linear-gradient(135deg, hsl(172 30% 12%), hsl(172 35% 18%));
 
+    /* Landing Page specific */
+    --landing-bg: 0 0% 100%;
+    --landing-bg-alt: 210 20% 98%;
+    --landing-section-gradient-from: 152 50% 97%;
+    --landing-section-gradient-to: 172 50% 97%;
+
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 hsl(220 30% 15% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(220 30% 15% / 0.08), 0 2px 4px -2px hsl(220 30% 15% / 0.05);
@@ -117,6 +123,19 @@
     --sidebar-accent-foreground: 180 20% 95%;
     --sidebar-border: 220 20% 15%;
     --sidebar-ring: 172 60% 50%;
+
+    /* Landing Page specific - Dark */
+    --landing-bg: 220 25% 8%;
+    --landing-bg-alt: 220 25% 10%;
+    --landing-section-gradient-from: 172 30% 10%;
+    --landing-section-gradient-to: 172 25% 12%;
+
+    /* Dark mode shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4), 0 2px 4px -2px hsl(0 0% 0% / 0.3);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.4), 0 4px 6px -4px hsl(0 0% 0% / 0.3);
+    --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.3), 0 1px 2px hsl(0 0% 0% / 0.2);
+    --shadow-card-hover: 0 10px 25px -5px hsl(172 60% 50% / 0.2), 0 8px 10px -6px hsl(172 60% 50% / 0.15);
   }
 }
 
@@ -170,7 +189,11 @@
   }
 
   .glass {
-    @apply bg-white/80 backdrop-blur-lg;
+    @apply bg-background/80 backdrop-blur-lg;
+  }
+
+  .dark .glass {
+    @apply bg-background/90 backdrop-blur-lg;
   }
 
   .card-interactive {

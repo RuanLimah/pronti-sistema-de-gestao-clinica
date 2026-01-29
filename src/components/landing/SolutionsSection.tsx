@@ -49,10 +49,10 @@ const solutions = [
 
 export function SolutionsSection() {
   return (
-    <section id="funcionalidades" className="py-20 md:py-28 bg-white">
+    <section id="funcionalidades" className="py-20 md:py-28 bg-background">
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center mb-16">
-          <span className="text-emerald-600 font-semibold text-sm uppercase tracking-wide">
+          <span className="text-primary font-semibold text-sm uppercase tracking-wide">
             ✅ Funcionalidades
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-4 mb-4">
@@ -67,7 +67,7 @@ export function SolutionsSection() {
           {solutions.map((solution, index) => (
             <div
               key={index}
-              className="group bg-gradient-to-b from-slate-50 to-white rounded-2xl p-6 border border-slate-100 hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 animate-fade-in"
+              className="group bg-gradient-to-b from-secondary/50 to-card rounded-2xl p-6 border border-border hover:border-primary/30 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 animate-fade-in"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-lg shadow-emerald-500/20">
@@ -85,7 +85,7 @@ export function SolutionsSection() {
               <ul className="space-y-2">
                 {solution.features.map((feature, i) => (
                   <li key={i} className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                    <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
                     <span className="text-muted-foreground">{feature}</span>
                   </li>
                 ))}

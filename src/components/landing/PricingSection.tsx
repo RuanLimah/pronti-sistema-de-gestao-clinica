@@ -88,10 +88,10 @@ export function PricingSection() {
   const navigate = useNavigate();
 
   return (
-    <section id="planos" className="py-20 md:py-28 bg-white">
+    <section id="planos" className="py-20 md:py-28 bg-background">
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center mb-16">
-          <span className="text-emerald-600 font-semibold text-sm uppercase tracking-wide">
+          <span className="text-primary font-semibold text-sm uppercase tracking-wide">
             💰 Planos e Preços
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-4 mb-4">
@@ -107,10 +107,10 @@ export function PricingSection() {
           {plans.map((plan, index) => (
             <div
               key={index}
-              className={`relative bg-white rounded-2xl p-6 border-2 transition-all duration-300 animate-fade-in ${
+              className={`relative bg-card rounded-2xl p-6 border-2 transition-all duration-300 animate-fade-in ${
                 plan.popular 
-                  ? "border-emerald-500 shadow-xl shadow-emerald-500/20 scale-105 lg:scale-110 z-10" 
-                  : "border-slate-200 hover:border-slate-300 hover:shadow-lg"
+                  ? "border-primary shadow-xl shadow-primary/20 scale-105 lg:scale-110 z-10" 
+                  : "border-border hover:border-muted-foreground/30 hover:shadow-lg"
               }`}
               style={{ animationDelay: `${index * 0.1}s` }}
             >
@@ -126,7 +126,7 @@ export function PricingSection() {
                 <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 ${
                   plan.popular 
                     ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white" 
-                    : "bg-slate-100 text-slate-600"
+                    : "bg-secondary text-muted-foreground"
                 }`}>
                   <plan.icon className="h-6 w-6" />
                 </div>
@@ -143,9 +143,9 @@ export function PricingSection() {
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-center gap-2 text-sm">
                     {feature.included ? (
-                      <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                      <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
                     ) : (
-                      <X className="h-4 w-4 text-slate-300 flex-shrink-0" />
+                      <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
                     )}
                     <span className={feature.included ? "text-foreground" : "text-muted-foreground"}>
                       {feature.text}
@@ -158,7 +158,7 @@ export function PricingSection() {
                 className={`w-full ${
                   plan.popular 
                     ? "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg" 
-                    : "bg-slate-100 text-foreground hover:bg-slate-200"
+                    : "bg-secondary text-foreground hover:bg-secondary/80"
                 }`}
                 onClick={() => navigate("/login?mode=signup")}
               >
@@ -183,10 +183,10 @@ export function PricingSection() {
             {addOns.map((addon, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between bg-slate-50 rounded-xl p-4 border border-slate-100"
+                className="flex items-center justify-between bg-secondary/50 rounded-xl p-4 border border-border"
               >
                 <span className="text-sm font-medium text-foreground">{addon.name}</span>
-                <span className="text-sm font-bold text-emerald-600">R$ {addon.price}/mês</span>
+                <span className="text-sm font-bold text-primary">R$ {addon.price}/mês</span>
               </div>
             ))}
           </div>

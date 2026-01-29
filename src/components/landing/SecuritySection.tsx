@@ -36,7 +36,7 @@ export function SecuritySection() {
           <span className="text-emerald-400 font-semibold text-sm uppercase tracking-wide">
             🔐 Segurança e Confiança
           </span>
-          <h2 className="font-display text-3xl md:text-4xl font-bold mt-4 mb-4">
+          <h2 className="font-display text-3xl md:text-4xl font-bold mt-4 mb-4 text-white">
             Seus dados estão seguros conosco
           </h2>
           <p className="text-slate-400 text-lg">

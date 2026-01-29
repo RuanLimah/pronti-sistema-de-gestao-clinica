@@ -42,10 +42,10 @@ const painPoints = [
 
 export function PainPointsSection() {
   return (
-    <section id="dores" className="py-20 md:py-28 bg-gradient-to-b from-slate-100 to-slate-50">
+    <section id="dores" className="py-20 md:py-28 bg-gradient-to-b from-secondary to-secondary/50 dark:from-secondary/30 dark:to-secondary/10">
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center mb-16">
-          <span className="text-rose-500 font-semibold text-sm uppercase tracking-wide">
+          <span className="text-destructive font-semibold text-sm uppercase tracking-wide">
             😖 As dores do dia a dia
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-4 mb-4">
@@ -60,12 +60,12 @@ export function PainPointsSection() {
           {painPoints.map((pain, index) => (
             <div
               key={index}
-              className="group bg-white rounded-2xl p-6 border border-rose-100 hover:border-rose-200 shadow-sm hover:shadow-md transition-all duration-300 animate-fade-in"
+              className="group bg-card rounded-2xl p-6 border border-destructive/20 hover:border-destructive/40 shadow-sm hover:shadow-md transition-all duration-300 animate-fade-in"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-rose-50 flex items-center justify-center flex-shrink-0 group-hover:bg-rose-100 transition-colors">
-                  <pain.icon className="h-6 w-6 text-rose-500" />
+                <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center flex-shrink-0 group-hover:bg-destructive/15 transition-colors">
+                  <pain.icon className="h-6 w-6 text-destructive" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground mb-1">
@@ -81,7 +81,7 @@ export function PainPointsSection() {
         </div>
 
         <div className="text-center mt-12">
-          <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-6 py-3 rounded-full font-medium">
+          <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-6 py-3 rounded-full font-medium">
             ✨ O PRONTI resolve todos esses problemas
           </div>
         </div>
