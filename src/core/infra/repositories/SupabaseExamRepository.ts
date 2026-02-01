@@ -66,4 +66,20 @@ export class SupabaseExamRepository implements ExamRepository {
 
     if (error) throw new Error(`Error deleting exam: ${error.message}`);
   }
+
+  async uploadFile(file: File, path: string): Promise<string> {
+    const { error } = await supabase.storage
+      .from('exams')
+      .upload(path, file, {
+        upsert: true
+      });
+
+    if (error) throw new Error(`Error uploading file: ${error.message}`);
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('exams')
+      .getPublicUrl(path);
+
+    return publicUrl;
+  }
 }

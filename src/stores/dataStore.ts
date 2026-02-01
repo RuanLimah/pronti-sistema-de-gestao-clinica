@@ -208,6 +208,7 @@ export interface ExameMedico {
     tipo: string;
     tamanho: number;
     url: string;
+    file?: File;
   };
   criadoEm: Date;
   atualizadoEm?: Date;
@@ -216,7 +217,7 @@ export interface ExameMedico {
 export interface Notificacao {
   id: string;
   medicoId: string;
-  tipo: 'agendamento' | 'cancelamento' | 'pagamento' | 'plano' | 'sistema';
+  tipo: 'agendamento' | 'cancelamento' | 'pagamento' | 'plano' | 'sistema' | 'lembrete';
   titulo: string;
   mensagem: string;
   lida: boolean;
@@ -251,7 +252,7 @@ interface DataStore {
   initConfiguracoes: (medicoId: string) => Configuracoes;
 
   // === CRUD Pacientes ===
-  fetchPacientes: (medicoId: string) => Promise<void>;
+  fetchPacientes: (medicoId: string, isAdmin?: boolean) => Promise<void>;
   fetchAtendimentos: (medicoId: string) => Promise<void>;
   fetchPagamentos: (medicoId: string) => Promise<void>;
   fetchProntuarios: (pacienteId: string) => Promise<void>;
@@ -261,10 +262,10 @@ interface DataStore {
   getPacienteById: (id: string) => Paciente | undefined;
   getPacientesByMedico: (medicoId: string) => Paciente[];
   getPacientesAtivos: (medicoId: string) => Paciente[];
-  addPaciente: (paciente: Omit<Paciente, 'id' | 'criadoEm'>) => Paciente;
-  updatePaciente: (id: string, data: Partial<Paciente>) => void;
-  deletePaciente: (id: string) => void;
-  togglePacienteStatus: (id: string) => void;
+  addPaciente: (paciente: Omit<Paciente, 'id' | 'criadoEm'>) => Promise<Paciente>;
+  updatePaciente: (id: string, data: Partial<Paciente>) => Promise<void>;
+  deletePaciente: (id: string) => Promise<void>;
+  togglePacienteStatus: (id: string) => Promise<void>;
 
   // === CRUD Atendimentos ===
   getAtendimentos: () => Atendimento[];
@@ -438,9 +439,11 @@ export const useDataStore = create<DataStore>()(
       },
 
       // ==================== CRUD PACIENTES ====================
-      fetchPacientes: async (medicoId) => {
+      fetchPacientes: async (medicoId, isAdmin) => {
         try {
-          const domainPatients = await patientRepo.listByUser(medicoId);
+          const domainPatients = isAdmin 
+            ? await patientRepo.listAll() 
+            : await patientRepo.listByUser(medicoId);
           const storePatients = domainPatients.map(mapToStorePatient);
           set({ pacientes: storePatients });
         } catch (error) {
@@ -605,27 +608,22 @@ export const useDataStore = create<DataStore>()(
       togglePacienteStatus: async (id) => {
         const paciente = get().getPacienteById(id);
         if (paciente) {
-          // If status is toggled, we might need a specific repo method or just update
-          // Currently repo only has deactivate. 
-          // Let's assume we use update or deactivate.
-          // If we want to reactivate, we need an activate method or update status.
-          // Repo update method doesn't expose status directly yet in DTO?
-          // I added status 'active' in create.
-          // I should add status to update if needed.
-          // For now, let's just assume deactivate for "toggle off" and maybe nothing for on?
-          // Actually, toggle usually means active <-> inactive.
-          // My repo `deactivate` sets status to inactive.
-          // I need `activate` too.
-          // Or just use update with status if I expose it.
-          // Let's skip implementing the backend toggle for now or use update if I add status to DTO.
-          // I'll leave it as async stub that updates local state for now to not break, 
-          // but really should fix repo.
-          
-           set((state) => ({
-             pacientes: state.pacientes.map((p) =>
-               p.id === id ? { ...p, status: p.status === 'ativo' ? 'inativo' : 'ativo', atualizadoEm: new Date() } : p
-             ),
-           }));
+          try {
+            if (paciente.status === 'ativo') {
+              await patientRepo.deactivate(id);
+            } else {
+              await patientRepo.activate(id);
+            }
+
+            set((state) => ({
+              pacientes: state.pacientes.map((p) =>
+                p.id === id ? { ...p, status: p.status === 'ativo' ? 'inativo' : 'ativo', atualizadoEm: new Date() } : p
+              ),
+            }));
+          } catch (error) {
+            console.error("Error toggling patient status:", error);
+            // Optionally revert optimistic update if we did one, but here we await first.
+          }
         }
       },
 
@@ -1112,12 +1110,20 @@ export const useDataStore = create<DataStore>()(
            const medicoId = exameData.medicoId || paciente?.medicoId;
            if (!medicoId) throw new Error("Medico ID required for exam");
 
+           let fileUrl = exameData.arquivo.url;
+           
+           // Upload file if exists
+           if (exameData.arquivo.file) {
+             const fileName = `${exameData.pacienteId}/${Date.now()}-${exameData.arquivo.nome}`;
+             fileUrl = await examRepo.uploadFile(exameData.arquivo.file, fileName);
+           }
+
            const domainExam = await examRepo.create(medicoId, {
              patient_id: exameData.pacienteId,
              name: exameData.nome,
              type: exameData.tipo,
              description: exameData.descricao,
-             file_url: exameData.arquivo.url,
+             file_url: fileUrl,
              file_name: exameData.arquivo.nome,
              file_type: exameData.arquivo.tipo,
              file_size: exameData.arquivo.tamanho

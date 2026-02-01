@@ -17,6 +17,7 @@ export interface ArquivoExame {
   tipo: string; // MIME type
   tamanho: number; // bytes
   url: string; // URL local ou Supabase Storage
+  file?: File; // Raw file for upload
 }
 
 export type TipoExame = 

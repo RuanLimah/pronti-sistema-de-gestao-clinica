@@ -134,23 +134,23 @@ export default function ProntuarioPage() {
     });
   };
 
-  const handleAddEvolucao = (texto: string) => {
-    addProntuario({
+  const handleAddEvolucao = async (texto: string) => {
+    await addProntuario({
       pacienteId: paciente.id,
       texto,
     });
   };
 
-  const handleEditEvolucao = (id: string, texto: string) => {
-    updateProntuario(id, { texto });
+  const handleEditEvolucao = async (id: string, texto: string) => {
+    await updateProntuario(id, { texto });
   };
 
-  const handleDeleteEvolucao = (id: string) => {
-    deleteProntuario(id);
+  const handleDeleteEvolucao = async (id: string) => {
+    await deleteProntuario(id);
   };
 
-  const handleUploadExame = (exameData: Omit<ExameMedico, 'id' | 'criadoEm'>) => {
-    addExame(exameData);
+  const handleUploadExame = async (exameData: Omit<ExameMedico, 'id' | 'criadoEm'>) => {
+    await addExame(exameData);
   };
 
   const handleDeleteExame = (id: string) => {

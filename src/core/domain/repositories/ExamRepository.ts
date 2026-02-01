@@ -17,4 +17,5 @@ export interface ExamRepository {
   listByPatient(patientId: string): Promise<Exam[]>;
   update(id: string, data: Partial<CreateExamDTO>): Promise<Exam>;
   delete(id: string): Promise<void>;
+  uploadFile(file: File, path: string): Promise<string>;
 }

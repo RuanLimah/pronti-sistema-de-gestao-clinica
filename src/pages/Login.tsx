@@ -51,9 +51,15 @@ export default function Login() {
   const [verificationCode, setVerificationCode] = useState('');
   const [pendingVerification, setPendingVerification] = useState<{ email?: boolean; phone?: boolean }>({});
   
-  const { login, isLoading } = useAuthStore();
+  const { login, signup, isLoading, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   useEffect(() => {
     const modeParam = searchParams.get('mode');

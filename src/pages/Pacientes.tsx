@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import {
   Trash2,
   UserCheck,
   UserX,
+  Edit2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -76,17 +77,18 @@ const defaultFilters: Filters = {
 
 export default function Pacientes() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const { getPacientesByMedico, addPaciente, deletePaciente, togglePacienteStatus, fetchPacientes } = useDataStore();
+  const { user, isAdmin } = useAuthStore();
+  const { pacientes: allPacientes, addPaciente, updatePaciente, deletePaciente, togglePacienteStatus, fetchPacientes } = useDataStore();
 
   useEffect(() => {
     if (user?.id) {
-      fetchPacientes(user.id);
+      fetchPacientes(user.id, isAdmin());
     }
-  }, [user?.id, fetchPacientes]);
+  }, [user?.id, fetchPacientes, isAdmin]);
 
   // Estados do modal de novo paciente
   const [criandoPaciente, setCriandoPaciente] = useState(false);
+  const [editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
   const [formPaciente, setFormPaciente] = useState({
     nome: "",
     telefone: "",
@@ -106,17 +108,11 @@ export default function Pacientes() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pacienteToDelete, setPacienteToDelete] = useState<Paciente | null>(null);
 
-  // Buscar pacientes do médico logado
-  useEffect(() => {
-    if (user?.id) {
-      fetchPacientes(user.id);
-    }
-  }, [user?.id, fetchPacientes]);
-
   const pacientes = useMemo(() => {
     if (!user?.id) return [];
-    return getPacientesByMedico(user.id);
-  }, [user?.id, getPacientesByMedico, getPacientesByMedico(user?.id || '').length]); // Trigger update when length changes
+    if (isAdmin()) return allPacientes;
+    return allPacientes.filter(p => p.medicoId === user.id);
+  }, [user?.id, allPacientes, isAdmin]);
 
   // Aplicar filtros + busca
   const filteredPatients = useMemo(() => {
@@ -125,14 +121,14 @@ export default function Pacientes() {
     // Busca rápida por nome
     if (searchQuery.trim()) {
       result = result.filter((p) =>
-        p.nome.toLowerCase().includes(searchQuery.toLowerCase())
+        (p.nome || '').toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
     // Filtro por nome (do modal)
     if (filters.nome.trim()) {
       result = result.filter((p) =>
-        p.nome.toLowerCase().includes(filters.nome.toLowerCase())
+        (p.nome || '').toLowerCase().includes(filters.nome.toLowerCase())
       );
     }
 
@@ -151,11 +147,14 @@ export default function Pacientes() {
 
     // Ordenação
     result.sort((a, b) => {
+      const nomeA = a.nome || '';
+      const nomeB = b.nome || '';
+      
       switch (filters.ordenacao) {
         case "nome-asc":
-          return a.nome.localeCompare(b.nome);
+          return nomeA.localeCompare(nomeB);
         case "nome-desc":
-          return b.nome.localeCompare(a.nome);
+          return nomeB.localeCompare(nomeA);
         case "recentes":
           return (b.criadoEm ? new Date(b.criadoEm).getTime() : 0) -
                 (a.criadoEm ? new Date(a.criadoEm).getTime() : 0);
@@ -186,7 +185,7 @@ export default function Pacientes() {
     setFormPaciente((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleSalvarPaciente() {
+  async function handleSalvarPaciente() {
     if (!formPaciente.nome.trim() || !formPaciente.telefone.trim()) {
       toast.error("Nome e telefone são obrigatórios");
       return;
@@ -197,18 +196,23 @@ export default function Pacientes() {
       return;
     }
 
-    addPaciente({
-      medicoId: user.id,
-      nome: formPaciente.nome,
-      telefone: formPaciente.telefone,
-      email: formPaciente.email || undefined,
-      valorConsulta: formPaciente.valorConsulta ? parseFloat(formPaciente.valorConsulta) : undefined,
-      status: "ativo",
-    });
+    try {
+      await addPaciente({
+        medicoId: user.id,
+        nome: formPaciente.nome,
+        telefone: formPaciente.telefone,
+        email: formPaciente.email || undefined,
+        valorConsulta: formPaciente.valorConsulta ? parseFloat(formPaciente.valorConsulta) : undefined,
+        status: "ativo",
+      });
 
-    toast.success("Paciente cadastrado com sucesso!");
-    setFormPaciente({ nome: "", telefone: "", email: "", valorConsulta: "" });
-    setCriandoPaciente(false);
+      toast.success("Paciente cadastrado com sucesso!");
+      setFormPaciente({ nome: "", telefone: "", email: "", valorConsulta: "" });
+      setCriandoPaciente(false);
+    } catch (error) {
+      console.error("Erro ao salvar paciente:", error);
+      toast.error("Erro ao salvar paciente");
+    }
   }
 
   function handleOpenFilter() {
@@ -251,20 +255,30 @@ export default function Pacientes() {
     setDeleteDialogOpen(true);
   }
 
-  function confirmDeletePaciente() {
+  async function confirmDeletePaciente() {
     if (pacienteToDelete) {
-      deletePaciente(pacienteToDelete.id);
-      toast.success(`Paciente ${pacienteToDelete.nome} excluído com sucesso!`);
-      setPacienteToDelete(null);
-      setDeleteDialogOpen(false);
+      try {
+        await deletePaciente(pacienteToDelete.id);
+        toast.success(`Paciente ${pacienteToDelete.nome} excluído com sucesso!`);
+        setPacienteToDelete(null);
+        setDeleteDialogOpen(false);
+      } catch (error) {
+        console.error("Erro ao excluir paciente:", error);
+        toast.error("Erro ao excluir paciente");
+      }
     }
   }
 
   // Ativar/Inativar paciente
-  function handleToggleStatus(paciente: Paciente) {
-    togglePacienteStatus(paciente.id);
-    const novoStatus = paciente.status === 'ativo' ? 'inativo' : 'ativo';
-    toast.success(`Paciente ${paciente.nome} ${novoStatus === 'ativo' ? 'ativado' : 'inativado'} com sucesso!`);
+  async function handleToggleStatus(paciente: Paciente) {
+    try {
+      await togglePacienteStatus(paciente.id);
+      const novoStatus = paciente.status === 'ativo' ? 'inativo' : 'ativo';
+      toast.success(`Paciente ${paciente.nome} ${novoStatus === 'ativo' ? 'ativado' : 'inativado'} com sucesso!`);
+    } catch (error) {
+      console.error("Erro ao alterar status:", error);
+      toast.error("Erro ao alterar status do paciente");
+    }
   }
 
   const hasActiveFilters = 
@@ -358,12 +372,18 @@ export default function Pacientes() {
         </div>
 
         {/* Modal Novo Paciente */}
-        <Dialog open={criandoPaciente} onOpenChange={setCriandoPaciente}>
+        <Dialog open={criandoPaciente} onOpenChange={(open) => {
+          setCriandoPaciente(open);
+          if (!open) {
+            setEditingPaciente(null);
+            setFormPaciente({ nome: "", telefone: "", email: "", valorConsulta: "" });
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Novo Paciente</DialogTitle>
+              <DialogTitle>{editingPaciente ? "Editar Paciente" : "Novo Paciente"}</DialogTitle>
               <DialogDescription>
-                Preencha os dados do novo paciente
+                {editingPaciente ? "Edite os dados do paciente" : "Preencha os dados do novo paciente"}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">

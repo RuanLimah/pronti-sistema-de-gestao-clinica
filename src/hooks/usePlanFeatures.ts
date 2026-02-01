@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/hooks/use-toast';
-import { FeatureFlags } from '@/types';
+import { PlanResources } from '@/types';
 
 export function usePlanFeatures() {
   const { plan, getFeatureFlags, hasFeature, checkPlanLimit } = useAuthStore();
@@ -22,7 +22,7 @@ export function usePlanFeatures() {
     return result.allowed;
   };
 
-  const requireFeature = (feature: keyof FeatureFlags): boolean => {
+  const requireFeature = (feature: keyof PlanResources): boolean => {
     const has = hasFeature(feature);
     
     if (!has) {

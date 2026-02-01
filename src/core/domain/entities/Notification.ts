@@ -2,7 +2,9 @@ export type NotificationType =
   | 'sistema' 
   | 'agendamento' 
   | 'pagamento' 
-  | 'lembrete';
+  | 'lembrete'
+  | 'cancelamento'
+  | 'plano';
 
 export interface Notification {
   id: string;

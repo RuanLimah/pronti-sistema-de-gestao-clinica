@@ -71,6 +71,9 @@ export function EvolucoesList({
   // Estados de filtro
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('todos');
   const [filtroData, setFiltroData] = useState('');
+  
+  // Estado de carregamento
+  const [loading, setLoading] = useState(false);
 
   // Modal de nova anotação
   const [novaAnotacaoOpen, setNovaAnotacaoOpen] = useState(false);
@@ -111,7 +114,7 @@ export function EvolucoesList({
     });
   }, [prontuarios, filtroTipo, filtroData]);
 
-  const handleAddAnotacao = () => {
+  const handleAddAnotacao = async () => {
     if (!novaAnotacao.trim()) {
       toast({
         title: "Erro",
@@ -121,13 +124,24 @@ export function EvolucoesList({
       return;
     }
 
-    onAdd(novaAnotacao);
-    setNovaAnotacao("");
-    setNovaAnotacaoOpen(false);
-    toast({
-      title: "Evolução registrada",
-      description: "A anotação foi adicionada ao prontuário.",
-    });
+    setLoading(true);
+    try {
+      await onAdd(novaAnotacao);
+      setNovaAnotacao("");
+      setNovaAnotacaoOpen(false);
+      toast({
+        title: "Evolução registrada",
+        description: "A anotação foi adicionada ao prontuário.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar anotação. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenEdit = (evolucao: Prontuario) => {
@@ -136,7 +150,7 @@ export function EvolucoesList({
     setEditOpen(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!evolucaoEditando || !textoEdit.trim()) {
       toast({
         title: "Erro",
@@ -146,14 +160,25 @@ export function EvolucoesList({
       return;
     }
 
-    onEdit(evolucaoEditando.id, textoEdit);
-    setEditOpen(false);
-    setEvolucaoEditando(null);
-    setTextoEdit("");
-    toast({
-      title: "Evolução atualizada",
-      description: "A anotação foi editada com sucesso.",
-    });
+    setLoading(true);
+    try {
+      await onEdit(evolucaoEditando.id, textoEdit);
+      setEditOpen(false);
+      setEvolucaoEditando(null);
+      setTextoEdit("");
+      toast({
+        title: "Evolução atualizada",
+        description: "A anotação foi editada com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao editar anotação. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenDelete = (evolucao: Prontuario) => {
@@ -161,15 +186,26 @@ export function EvolucoesList({
     setDeleteOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (evolucaoToDelete) {
-      onDelete(evolucaoToDelete.id);
-      toast({
-        title: "Evolução excluída",
-        description: "A anotação foi removida do prontuário.",
-      });
-      setDeleteOpen(false);
-      setEvolucaoToDelete(null);
+      setLoading(true);
+      try {
+        await onDelete(evolucaoToDelete.id);
+        toast({
+          title: "Evolução excluída",
+          description: "A anotação foi removida do prontuário.",
+        });
+        setDeleteOpen(false);
+        setEvolucaoToDelete(null);
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir anotação. Tente novamente.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -371,12 +407,12 @@ export function EvolucoesList({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNovaAnotacaoOpen(false)}>
+            <Button variant="outline" onClick={() => setNovaAnotacaoOpen(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button variant="hero" onClick={handleAddAnotacao}>
+            <Button variant="hero" onClick={handleAddAnotacao} disabled={loading}>
               <Save className="h-4 w-4 mr-2" />
-              Salvar Anotação
+              {loading ? "Salvando..." : "Salvar Anotação"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -413,12 +449,12 @@ export function EvolucoesList({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button variant="hero" onClick={handleSaveEdit}>
+            <Button variant="hero" onClick={handleSaveEdit} disabled={loading}>
               <Save className="h-4 w-4 mr-2" />
-              Salvar Alterações
+              {loading ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -434,12 +470,16 @@ export function EvolucoesList({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={confirmDelete}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={loading}
             >
-              Excluir
+              {loading ? "Excluindo..." : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

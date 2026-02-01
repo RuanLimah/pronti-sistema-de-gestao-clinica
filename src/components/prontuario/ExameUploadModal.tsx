@@ -35,7 +35,7 @@ interface ExameUploadModalProps {
   onOpenChange: (open: boolean) => void;
   pacienteId: string;
   medicoId?: string;
-  onUpload: (exame: Omit<ExameMedico, 'id' | 'criadoEm'>) => void;
+  onUpload: (exame: Omit<ExameMedico, 'id' | 'criadoEm'>) => Promise<void> | void;
 }
 
 export function ExameUploadModal({
@@ -51,6 +51,7 @@ export function ExameUploadModal({
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
@@ -128,7 +129,7 @@ export function ExameUploadModal({
     setIsDragging(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!nome.trim()) {
       toast({
         title: "Nome obrigatório",
@@ -147,29 +148,42 @@ export function ExameUploadModal({
       return;
     }
 
-    // Criar URL local (será substituído por Supabase Storage)
-    const localUrl = URL.createObjectURL(arquivo);
+    setLoading(true);
 
-    onUpload({
-      pacienteId,
-      medicoId,
-      nome: nome.trim(),
-      tipo,
-      descricao: descricao.trim() || undefined,
-      arquivo: {
-        nome: arquivo.name,
-        tipo: arquivo.type,
-        tamanho: arquivo.size,
-        url: localUrl,
-      },
-    });
+    try {
+      // Criar URL local (será substituído por Supabase Storage)
+      const localUrl = URL.createObjectURL(arquivo);
 
-    toast({
-      title: "Exame anexado",
-      description: "O arquivo foi adicionado ao prontuário.",
-    });
+      await onUpload({
+        pacienteId,
+        medicoId,
+        nome: nome.trim(),
+        tipo,
+        descricao: descricao.trim() || undefined,
+        arquivo: {
+          nome: arquivo.name,
+          tipo: arquivo.type,
+          tamanho: arquivo.size,
+          url: localUrl,
+          file: arquivo,
+        },
+      });
 
-    handleClose();
+      toast({
+        title: "Exame anexado",
+        description: "O arquivo foi adicionado ao prontuário.",
+      });
+
+      handleClose();
+    } catch (error) {
+      toast({
+        title: "Erro no upload",
+        description: "Ocorreu um erro ao salvar o exame. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -314,12 +328,12 @@ export function ExameUploadModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleClose} disabled={loading}>
             Cancelar
           </Button>
-          <Button variant="hero" onClick={handleSubmit} disabled={!arquivo}>
+          <Button variant="hero" onClick={handleSubmit} disabled={!arquivo || loading}>
             <Save className="h-4 w-4 mr-2" />
-            Salvar Exame
+            {loading ? "Salvando..." : "Salvar Exame"}
           </Button>
         </DialogFooter>
       </DialogContent>

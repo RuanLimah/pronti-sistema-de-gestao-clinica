@@ -42,14 +42,25 @@ export class SupabasePatientRepository implements PatientRepository {
     const { data: patients, error } = await supabase
       .from('patients')
       .select('*')
-      .eq('client_id', userId)
-      .eq('status', 'active');
+      .eq('client_id', userId);
 
     if (error) {
       throw new Error(`Error listing patients: ${error.message}`);
     }
 
-    return patients.map(this.mapToEntity);
+    return (patients || []).map(p => this.mapToEntity(p));
+  }
+
+  async listAll(): Promise<Patient[]> {
+    const { data: patients, error } = await supabase
+      .from('patients')
+      .select('*');
+
+    if (error) {
+      throw new Error(`Error listing all patients: ${error.message}`);
+    }
+
+    return (patients || []).map(p => this.mapToEntity(p));
   }
 
   async deactivate(id: string): Promise<void> {
@@ -60,6 +71,17 @@ export class SupabasePatientRepository implements PatientRepository {
 
     if (error) {
       throw new Error(`Error deactivating patient: ${error.message}`);
+    }
+  }
+
+  async activate(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('patients')
+      .update({ status: 'active' })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Error activating patient: ${error.message}`);
     }
   }
 
@@ -102,13 +124,16 @@ export class SupabasePatientRepository implements PatientRepository {
   }
 
   private mapToEntity(dbRow: any): Patient {
+    if (!dbRow) {
+      throw new Error("Invalid patient data: dbRow is null");
+    }
     return {
       id: dbRow.id,
       user_id: dbRow.client_id,
-      name: dbRow.name,
-      phone: dbRow.phone,
-      email: dbRow.email,
-      notes: dbRow.observations,
+      name: dbRow.name || 'Sem Nome',
+      phone: dbRow.phone || '',
+      email: dbRow.email || '',
+      notes: dbRow.observations || '',
       active: dbRow.status === 'active',
       birth_date: dbRow.birth_date,
       cpf: dbRow.cpf,

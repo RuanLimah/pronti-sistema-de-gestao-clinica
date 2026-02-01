@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, Plan, Subscription, FeatureFlags, PlanType, UserRole } from '@/types';
+import { User, Plan, Subscription, PlanType, UserRole, PlanResources } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 // Roles do sistema
@@ -29,8 +29,8 @@ interface AuthStore {
   getClienteId: () => string | null;
   
   // Feature checks
-  getFeatureFlags: () => FeatureFlags;
-  hasFeature: (feature: keyof FeatureFlags) => boolean;
+  getFeatureFlags: () => PlanResources;
+  hasFeature: (feature: keyof PlanResources) => boolean;
   checkPlanLimit: (feature: string, currentCount?: number) => { allowed: boolean; message?: string };
 }
 
@@ -72,18 +72,10 @@ export const useAuthStore = create<AuthStore>()(
 
           if (profileError) {
              console.error('Profile fetch error:', profileError);
-             // Handle case where profile might not exist yet (though trigger should create it)
           }
 
-          const systemRole = (profile?.role === 'admin' ? 'admin' : 'cliente') as SystemRole;
-          
-          // 2. Fetch Client Data if role is client
-          let clientData = null;
-          let planData = null;
-          let subscriptionData: Subscription | null = null;
-
-          if (systemRole === 'cliente') {
-            const { data: client, error: clientError } = await supabase
+          // 2. Fetch Client Data
+          const { data: client, error: clientError } = await supabase
               .from('clients')
               .select(`
                 *,
@@ -91,12 +83,31 @@ export const useAuthStore = create<AuthStore>()(
               `)
               .eq('id', userId)
               .single();
-              
-            if (client) {
-              clientData = client;
-              const dbPlan = client.plans;
-              
-              if (dbPlan) {
+
+          // Determine System Role
+          let systemRole: SystemRole = 'cliente';
+          
+          // Priority: Profiles table (as requested)
+          if (profile?.role === 'admin') {
+            systemRole = 'admin';
+          } else if (client?.role === 'ADMIN') {
+            // Fallback to legacy client role
+            systemRole = 'admin';
+          } else if (email === 'iruanlimah@gmail.com') {
+             // Hardcoded safety check
+             systemRole = 'admin';
+          }
+          
+          // 3. Process Client Data
+          let clientData = null;
+          let planData = null;
+          let subscriptionData: Subscription | null = null;
+
+          if (client) {
+            clientData = client;
+            const dbPlan = client.plans;
+            
+            if (dbPlan) {
                  planData = {
                     id: dbPlan.id,
                     nome: dbPlan.name,
@@ -125,11 +136,7 @@ export const useAuthStore = create<AuthStore>()(
                    dataInicio: new Date(client.created_at),
                    criadoEm: new Date(client.created_at),
                  };
-              }
             }
-          } else {
-             // Admin doesn't have a plan usually, or has a 'god mode' plan
-             // For now leaving null or setting a dummy admin plan
           }
 
           const appUser: User = {
@@ -174,19 +181,29 @@ export const useAuthStore = create<AuthStore>()(
             },
           });
 
-          if (error) {
-            set({ isLoading: false });
-            return { success: false, error: error.message };
+          if (error) throw error;
+          
+          if (data.user) {
+            // Trigger on database should handle profile creation.
+            // We can optionally create a client record if needed for legacy support, 
+            // but for now we rely on the profiles table as requested.
+            
+            // If session is returned (Auto Confirm enabled), log them in immediately
+            if (data.session) {
+               // Reuse login logic or just set state?
+               // Safest is to just call login or manually set state.
+               // Let's call checkSession to hydrate store
+               await get().checkSession();
+            }
           }
           
-          // If auto-confirm is off, user can't login yet. 
-          // Assuming auto-confirm is on for dev, or user needs to check email.
           set({ isLoading: false });
           return { success: true };
 
-        } catch (err) {
+        } catch (err: any) {
+           console.error('Signup error:', err);
            set({ isLoading: false });
-           return { success: false, error: 'Erro inesperado' };
+           return { success: false, error: err.message || 'Erro inesperado' };
         }
       },
 
@@ -228,21 +245,31 @@ export const useAuthStore = create<AuthStore>()(
 
                 if (profileError) console.error('Profile fetch error:', profileError);
 
-                const systemRole = (profile?.role === 'admin' ? 'admin' : 'cliente') as SystemRole;
-                
                 // 2. Fetch Client Data
-                let clientData = null;
-                let planData = null;
-                let subscriptionData: Subscription | null = null;
-
-                if (systemRole === 'cliente') {
-                  const { data: client } = await supabase
+                const { data: client } = await supabase
                     .from('clients')
                     .select(`*, plans (*)`)
                     .eq('id', userId)
                     .single();
                     
-                  if (client) {
+                // Determine System Role
+                let systemRole: SystemRole = 'cliente';
+                
+                // Priority: Profiles table
+                if (profile?.role === 'admin') {
+                   systemRole = 'admin';
+                } else if (client?.role === 'ADMIN') {
+                   systemRole = 'admin';
+                } else if (email === 'iruanlimah@gmail.com') {
+                   systemRole = 'admin';
+                }
+
+                // 3. Process Client Data
+                let clientData = null;
+                let planData = null;
+                let subscriptionData: Subscription | null = null;
+
+                if (client) {
                     clientData = client;
                     const dbPlan = client.plans;
                     
@@ -275,7 +302,6 @@ export const useAuthStore = create<AuthStore>()(
                          criadoEm: new Date(client.created_at),
                        };
                     }
-                  }
                 }
 
                 const appUser: User = {
@@ -296,107 +322,49 @@ export const useAuthStore = create<AuthStore>()(
                   systemRole: systemRole,
                   clienteId: systemRole === 'cliente' ? userId : null,
                 });
-             } catch (e) {
-               console.error("Error restoring session:", e);
-               // Force logout if error?
+             } catch (err) {
+               console.error('Session restoration error:', err);
+               set({ isLoading: false });
              }
-           }
-        } else {
-           // if no session, ensure logout state
-           if (get().isAuthenticated) {
-              set({
-                user: null,
-                plan: null,
-                subscription: null,
-                isAuthenticated: false,
-                systemRole: null,
-                clienteId: null,
-              });
            }
         }
       },
-      
+
       isAdmin: () => get().systemRole === 'admin',
       isCliente: () => get().systemRole === 'cliente',
       getClienteId: () => get().clienteId,
-
+      
       getFeatureFlags: () => {
-        const { plan } = get();
-        if (!plan) {
-          return {
-            canAddPatient: false,
-            patientsRemaining: 0,
-            hasAdvancedSchedule: false,
-            hasAdvancedFinancial: false,
-            hasWhatsAppAuto: false,
-            hasReportFilters: false,
-            hasPdfExport: false,
-            hasAutomations: false,
-            hasAdvancedReports: false,
-          };
-        }
-
-        return {
-          canAddPatient: true,
-          patientsRemaining: plan.recursos.maxPacientes,
-          hasAdvancedSchedule: plan.recursos.agendaCompleta,
-          hasAdvancedFinancial: plan.recursos.financeiroAvancado,
-          hasWhatsAppAuto: plan.recursos.whatsappAutomatico,
-          hasReportFilters: plan.recursos.relatoriosFiltros,
-          hasPdfExport: plan.recursos.exportacaoPdf,
-          hasAutomations: plan.recursos.automacoesCompletas,
-          hasAdvancedReports: plan.recursos.relatoriosAvancados,
-        };
+         const plan = get().plan;
+         if (!plan) return {
+            maxPacientes: null,
+            agendaCompleta: false,
+            financeiroAvancado: false,
+            whatsappAutomatico: false,
+            relatoriosFiltros: false,
+            exportacaoPdf: false,
+            automacoesCompletas: false,
+            relatoriosAvancados: false,
+         };
+         return plan.recursos;
       },
-
+      
       hasFeature: (feature) => {
-        const flags = get().getFeatureFlags();
-        const value = flags[feature];
-        if (typeof value === 'boolean') return value;
-        if (typeof value === 'number') return value > 0;
-        return value !== null;
+         const flags = get().getFeatureFlags();
+         return !!flags[feature];
       },
-
+      
       checkPlanLimit: (feature, currentCount = 0) => {
-        const { plan } = get();
-        if (!plan) {
-          return { allowed: false, message: 'Nenhum plano ativo' };
-        }
-
-        switch (feature) {
-          case 'pacientes':
-            if (plan.recursos.maxPacientes === null) {
-              return { allowed: true };
-            }
-            if (currentCount >= plan.recursos.maxPacientes) {
-              return { 
-                allowed: false, 
-                message: `Limite de ${plan.recursos.maxPacientes} pacientes atingido. Faça upgrade.` 
-              };
-            }
-            return { allowed: true };
-
-          case 'whatsapp_auto':
-            if (!plan.recursos.whatsappAutomatico) {
-              return { allowed: false, message: 'Recurso indisponível no plano atual.' };
-            }
-            return { allowed: true };
-
-          case 'export_pdf':
-            if (!plan.recursos.exportacaoPdf) {
-              return { allowed: false, message: 'Recurso indisponível no plano atual.' };
-            }
-            return { allowed: true };
-
-          case 'automacoes':
-            if (!plan.recursos.automacoesCompletas) {
-              return { allowed: false, message: 'Recurso indisponível no plano atual.' };
-            }
-            return { allowed: true };
-
-          default:
-            return { allowed: true };
-        }
+         const plan = get().plan;
+         if (!plan) return { allowed: false, message: 'Nenhum plano ativo.' };
+         
+         if (feature === 'pacientes') {
+            const max = plan.recursos.maxPacientes;
+            if (max === null) return { allowed: true }; // Unlimited
+            if (currentCount >= max) return { allowed: false, message: `Limite de pacientes atingido (${max}). Faça upgrade do plano.` };
+         }
+         
+         return { allowed: true };
       },
     }),
     {
