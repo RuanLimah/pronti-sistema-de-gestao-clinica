@@ -1,63 +1,48 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { Doctor, AuditLog, Plan, Addon, DoctorModules, DoctorStatus } from '@/types/admin';
+import { SupabaseAdminRepository } from '@/core/infra/repositories/SupabaseAdminRepository';
 
-// Types
-export type DoctorStatus = 'ativo' | 'suspenso' | 'bloqueado';
-
-export interface DoctorModules {
-  agenda: boolean;
-  financeiro: boolean;
-  whatsapp: boolean;
-  relatorios: boolean;
-  prontuario: boolean;
-}
-
-export interface Doctor {
-  id: string;
-  nome: string;
-  email: string;
-  crp: string;
-  telefone?: string;
-  foto?: string;
-  status: DoctorStatus;
-  plano: 'basico' | 'profissional' | 'premium';
-  modules: DoctorModules;
-  ultimoAcesso: Date;
-  criadoEm: Date;
-  suspensaoMotivo?: string;
-  bloqueioMotivo?: string;
-}
-
-export interface AuditLog {
-  id: string;
-  adminId: string;
-  adminNome: string;
-  doctorId: string;
-  doctorNome: string;
-  acao: 'status_alterado' | 'plano_alterado' | 'modulo_alterado' | 'medico_criado' | 'medico_deletado';
-  detalhes: string;
-  valorAnterior?: string;
-  valorNovo?: string;
-  criadoEm: Date;
-}
+const adminRepo = new SupabaseAdminRepository();
 
 interface AdminStore {
   doctors: Doctor[];
   auditLogs: AuditLog[];
+  plans: Plan[];
+  addons: Addon[];
+  isLoading: boolean;
   
+  // Data Fetching
+  fetchDoctors: () => Promise<void>;
+  fetchPlans: () => Promise<void>;
+  fetchAddons: () => Promise<void>;
+  fetchAuditLogs: () => Promise<void>;
+  fetchAll: () => Promise<void>;
+
   // Doctor actions
   getDoctors: () => Doctor[];
   getDoctorById: (id: string) => Doctor | undefined;
-  updateDoctorStatus: (id: string, status: DoctorStatus, motivo?: string, adminId?: string, adminNome?: string) => void;
-  updateDoctorPlan: (id: string, plano: 'basico' | 'profissional' | 'premium', adminId?: string, adminNome?: string) => void;
-  updateDoctorModule: (id: string, module: keyof DoctorModules, enabled: boolean, adminId?: string, adminNome?: string) => void;
-  addDoctor: (doctor: Omit<Doctor, 'id' | 'criadoEm' | 'ultimoAcesso' | 'modules'>, adminId?: string, adminNome?: string) => void;
-  deleteDoctor: (id: string, adminId?: string, adminNome?: string) => void;
+  updateDoctorStatus: (id: string, status: DoctorStatus, motivo?: string, adminId?: string, adminNome?: string) => Promise<void>;
+  updateDoctorPlan: (id: string, plano: any, adminId?: string, adminNome?: string) => Promise<void>;
+  updateDoctorModule: (id: string, module: keyof DoctorModules, enabled: boolean, adminId?: string, adminNome?: string) => Promise<void>;
+  toggleDoctorAddon: (id: string, addonSlug: string, enabled: boolean, adminId?: string, adminNome?: string) => Promise<void>;
+  addDoctor: (doctor: Omit<Doctor, 'id' | 'criadoEm' | 'ultimoAcesso' | 'modules'>, adminId?: string, adminNome?: string) => Promise<void>;
+  updateDoctorLimits: (id: string, limits: Partial<Plan['limites']>, adminId?: string, adminNome?: string) => Promise<void>;
+  deleteDoctor: (id: string, adminId?: string, adminNome?: string) => Promise<void>;
   
+  // Plan actions
+  updatePlan: (plan: Plan) => Promise<void>;
+  createPlan: (plan: Omit<Plan, 'id' | 'assinantes'>) => Promise<void>;
+  deletePlan: (id: string) => Promise<void>;
+
+  // Addon actions
+  updateAddon: (addon: Addon) => Promise<void>;
+  createAddon: (addon: Omit<Addon, 'id' | 'assinantes'>) => Promise<void>;
+
   // Audit actions
   getAuditLogs: () => AuditLog[];
   getAuditLogsByDoctor: (doctorId: string) => AuditLog[];
-  addAuditLog: (log: Omit<AuditLog, 'id' | 'criadoEm'>) => void;
+  addAuditLog: (log: Omit<AuditLog, 'id' | 'criadoEm'>) => Promise<void>;
   
   // Stats
   getStats: () => {
@@ -69,139 +54,106 @@ interface AdminStore {
   };
 }
 
-// Mock initial data
-const initialDoctors: Doctor[] = [
-  {
-    id: 'medico-1',
-    nome: 'Dra. Ana Silva',
-    email: 'dra.ana@pronti.com',
-    crp: '06/123456',
-    telefone: '(11) 99999-1111',
-    status: 'ativo',
-    plano: 'profissional',
-    modules: { agenda: true, financeiro: true, whatsapp: true, relatorios: true, prontuario: true },
-    ultimoAcesso: new Date(),
-    criadoEm: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: 'medico-2',
-    nome: 'Dr. Carlos Mendes',
-    email: 'dr.carlos@pronti.com',
-    crp: '06/789012',
-    telefone: '(11) 99999-2222',
-    status: 'ativo',
-    plano: 'basico',
-    modules: { agenda: true, financeiro: true, whatsapp: false, relatorios: false, prontuario: true },
-    ultimoAcesso: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    criadoEm: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: 'medico-3',
-    nome: 'Dra. Maria Santos',
-    email: 'dra.maria@pronti.com',
-    crp: '06/345678',
-    telefone: '(11) 99999-3333',
-    status: 'suspenso',
-    plano: 'profissional',
-    suspensaoMotivo: 'Inadimplência há 30 dias',
-    modules: { agenda: true, financeiro: true, whatsapp: true, relatorios: true, prontuario: true },
-    ultimoAcesso: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    criadoEm: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: 'medico-4',
-    nome: 'Dr. Pedro Lima',
-    email: 'dr.pedro@pronti.com',
-    crp: '06/901234',
-    telefone: '(11) 99999-4444',
-    status: 'bloqueado',
-    plano: 'basico',
-    bloqueioMotivo: 'Violação dos termos de uso',
-    modules: { agenda: false, financeiro: false, whatsapp: false, relatorios: false, prontuario: false },
-    ultimoAcesso: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    criadoEm: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: 'medico-5',
-    nome: 'Dra. Juliana Costa',
-    email: 'dra.juliana@pronti.com',
-    crp: '06/567890',
-    telefone: '(11) 99999-5555',
-    status: 'ativo',
-    plano: 'premium',
-    modules: { agenda: true, financeiro: true, whatsapp: true, relatorios: true, prontuario: true },
-    ultimoAcesso: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    criadoEm: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
-  },
-];
-
-const initialAuditLogs: AuditLog[] = [
-  {
-    id: 'audit-1',
-    adminId: 'admin-1',
-    adminNome: 'Administrador',
-    doctorId: 'medico-3',
-    doctorNome: 'Dra. Maria Santos',
-    acao: 'status_alterado',
-    detalhes: 'Status alterado para suspenso',
-    valorAnterior: 'ativo',
-    valorNovo: 'suspenso',
-    criadoEm: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: 'audit-2',
-    adminId: 'admin-1',
-    adminNome: 'Administrador',
-    doctorId: 'medico-4',
-    doctorNome: 'Dr. Pedro Lima',
-    acao: 'status_alterado',
-    detalhes: 'Status alterado para bloqueado',
-    valorAnterior: 'suspenso',
-    valorNovo: 'bloqueado',
-    criadoEm: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
-  },
-];
-
 export const useAdminStore = create<AdminStore>()(
   persist(
     (set, get) => ({
-      doctors: initialDoctors,
-      auditLogs: initialAuditLogs,
+      doctors: [],
+      auditLogs: [],
+      plans: [],
+      addons: [],
+      isLoading: false,
+
+      fetchDoctors: async () => {
+        set({ isLoading: true });
+        try {
+          const doctors = await adminRepo.listDoctors();
+          set({ doctors });
+        } catch (error) {
+          console.error('Error fetching doctors:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      fetchPlans: async () => {
+        set({ isLoading: true });
+        try {
+          const plans = await adminRepo.listPlans();
+          set({ plans });
+        } catch (error) {
+          console.error('Error fetching plans:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      fetchAddons: async () => {
+        set({ isLoading: true });
+        try {
+          const addons = await adminRepo.listAddons();
+          set({ addons });
+        } catch (error) {
+          console.error('Error fetching addons:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      fetchAuditLogs: async () => {
+        set({ isLoading: true });
+        try {
+          const auditLogs = await adminRepo.listAuditLogs();
+          set({ auditLogs });
+        } catch (error) {
+          console.error('Error fetching audit logs:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      fetchAll: async () => {
+        set({ isLoading: true });
+        try {
+          const [doctors, plans, addons, auditLogs] = await Promise.all([
+            adminRepo.listDoctors(),
+            adminRepo.listPlans(),
+            adminRepo.listAddons(),
+            adminRepo.listAuditLogs(),
+          ]);
+          set({ doctors, plans, addons, auditLogs });
+        } catch (error) {
+          console.error('Error fetching admin data:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
 
       getDoctors: () => get().doctors,
       
       getDoctorById: (id) => get().doctors.find(d => d.id === id),
 
-      updateDoctorStatus: (id, status, motivo, adminId = 'admin-1', adminNome = 'Administrador') => {
+      updateDoctorStatus: async (id, status, motivo, adminId = 'admin-1', adminNome = 'Administrador') => {
         const doctor = get().doctors.find(d => d.id === id);
         if (!doctor) return;
 
         const valorAnterior = doctor.status;
         
+        // Optimistic update
         set(state => ({
           doctors: state.doctors.map(d => {
             if (d.id !== id) return d;
-            
-            const updates: Partial<Doctor> = { status };
-            
-            if (status === 'suspenso') {
-              updates.suspensaoMotivo = motivo;
-              updates.bloqueioMotivo = undefined;
-            } else if (status === 'bloqueado') {
-              updates.bloqueioMotivo = motivo;
-              updates.suspensaoMotivo = undefined;
-              // Disable all modules when blocked
-              updates.modules = { agenda: false, financeiro: false, whatsapp: false, relatorios: false, prontuario: false };
-            } else {
-              updates.suspensaoMotivo = undefined;
-              updates.bloqueioMotivo = undefined;
-            }
-            
-            return { ...d, ...updates };
+            return { ...d, status, suspensaoMotivo: status === 'suspenso' ? motivo : undefined, bloqueioMotivo: status === 'bloqueado' ? motivo : undefined };
           }),
         }));
 
-        get().addAuditLog({
+        try {
+          await adminRepo.updateClientStatus(id, status);
+        } catch (error) {
+          console.error('Error updating client status:', error);
+          // Revert optimistic update?
+        }
+
+        await get().addAuditLog({
           adminId,
           adminNome,
           doctorId: id,
@@ -213,7 +165,7 @@ export const useAdminStore = create<AdminStore>()(
         });
       },
 
-      updateDoctorPlan: (id, plano, adminId = 'admin-1', adminNome = 'Administrador') => {
+      updateDoctorPlan: async (id, plano, adminId = 'admin-1', adminNome = 'Administrador') => {
         const doctor = get().doctors.find(d => d.id === id);
         if (!doctor) return;
 
@@ -225,7 +177,13 @@ export const useAdminStore = create<AdminStore>()(
           ),
         }));
 
-        get().addAuditLog({
+        try {
+          await adminRepo.updateClientPlan(id, plano);
+        } catch (error) {
+          console.error('Error updating client plan:', error);
+        }
+        
+        await get().addAuditLog({
           adminId,
           adminNome,
           doctorId: id,
@@ -237,19 +195,27 @@ export const useAdminStore = create<AdminStore>()(
         });
       },
 
-      updateDoctorModule: (id, module, enabled, adminId = 'admin-1', adminNome = 'Administrador') => {
+      updateDoctorModule: async (id, module, enabled, adminId = 'admin-1', adminNome = 'Administrador') => {
         const doctor = get().doctors.find(d => d.id === id);
         if (!doctor) return;
         
+        const newModules = { ...doctor.modules, [module]: enabled };
+
         set(state => ({
           doctors: state.doctors.map(d => 
             d.id === id 
-              ? { ...d, modules: { ...d.modules, [module]: enabled } }
+              ? { ...d, modules: newModules }
               : d
           ),
         }));
 
-        get().addAuditLog({
+        try {
+          await adminRepo.updateClientModules(id, newModules);
+        } catch (error) {
+          console.error('Error updating client modules:', error);
+        }
+
+        await get().addAuditLog({
           adminId,
           adminNome,
           doctorId: id,
@@ -261,38 +227,109 @@ export const useAdminStore = create<AdminStore>()(
         });
       },
 
-      addDoctor: (doctorData, adminId = 'admin-1', adminNome = 'Administrador') => {
-        const newDoctor: Doctor = {
-          ...doctorData,
-          id: `medico-${Date.now()}`,
-          criadoEm: new Date(),
-          ultimoAcesso: new Date(),
-          modules: { agenda: true, financeiro: true, whatsapp: false, relatorios: false, prontuario: true },
-        };
-
-        set(state => ({
-          doctors: [...state.doctors, newDoctor],
-        }));
-
-        get().addAuditLog({
-          adminId,
-          adminNome,
-          doctorId: newDoctor.id,
-          doctorNome: newDoctor.nome,
-          acao: 'medico_criado',
-          detalhes: `Médico "${newDoctor.nome}" criado com plano ${newDoctor.plano}`,
-        });
-      },
-
-      deleteDoctor: (id, adminId = 'admin-1', adminNome = 'Administrador') => {
+      updateDoctorLimits: async (id, limits, adminId = 'admin-1', adminNome = 'Administrador') => {
         const doctor = get().doctors.find(d => d.id === id);
         if (!doctor) return;
 
         set(state => ({
+          doctors: state.doctors.map(d =>
+            d.id === id
+              ? { ...d, customLimits: limits }
+              : d
+          ),
+        }));
+
+        try {
+          await adminRepo.updateClientLimits(id, limits);
+        } catch (error) {
+          console.error('Error updating client limits:', error);
+        }
+
+        await get().addAuditLog({
+          adminId,
+          adminNome,
+          doctorId: id,
+          doctorNome: doctor.nome,
+          acao: 'plano_alterado', // Using similar action type
+          detalhes: `Limites personalizados atualizados`,
+          valorAnterior: JSON.stringify(doctor.customLimits || {}),
+          valorNovo: JSON.stringify(limits),
+        });
+      },
+
+      toggleDoctorAddon: async (id, addonSlug, enabled, adminId = 'admin-1', adminNome = 'Administrador') => {
+        const doctor = get().doctors.find(d => d.id === id);
+        if (!doctor) return;
+        
+        // Optimistic update
+        const newAddons = enabled 
+          ? [...(doctor.addons || []), addonSlug]
+          : (doctor.addons || []).filter(a => a !== addonSlug);
+
+        set(state => ({
+          doctors: state.doctors.map(d => 
+            d.id === id 
+              ? { ...d, addons: newAddons }
+              : d
+          ),
+        }));
+
+        try {
+          if (enabled) {
+            await adminRepo.addClientAddon(id, addonSlug);
+          } else {
+            await adminRepo.removeClientAddon(id, addonSlug);
+          }
+        } catch (error) {
+          console.error('Error toggling client addon:', error);
+          // Revert on error could be implemented here
+        }
+
+        await get().addAuditLog({
+          adminId,
+          adminNome,
+          doctorId: id,
+          doctorNome: doctor.nome,
+          acao: 'modulo_alterado', // Using similar action type or create new one
+          detalhes: `Addon "${addonSlug}" ${enabled ? 'ativado' : 'desativado'}`,
+          valorAnterior: String(!enabled),
+          valorNovo: String(enabled),
+        });
+      },
+
+      addDoctor: async (doctorData, adminId = 'admin-1', adminNome = 'Administrador') => {
+        // Creating a user requires Auth API which is restricted on client-side.
+        // We log a warning for now.
+        console.warn('Creating users via Admin Panel is not fully supported without backend function.');
+        
+        await get().addAuditLog({
+          adminId,
+          adminNome,
+          doctorId: 'new-id',
+          doctorNome: doctorData.nome,
+          acao: 'medico_criado',
+          detalhes: `Tentativa de criar médico "${doctorData.nome}" (Requer Backend)`,
+        });
+        
+        get().fetchDoctors();
+      },
+
+      deleteDoctor: async (id, adminId = 'admin-1', adminNome = 'Administrador') => {
+        const doctor = get().doctors.find(d => d.id === id);
+        if (!doctor) return;
+
+        try {
+          await adminRepo.deleteClient(id);
+        } catch (error) {
+          console.error('Error deleting client:', error);
+          return;
+        }
+        
+        set(state => ({
           doctors: state.doctors.filter(d => d.id !== id),
         }));
 
-        get().addAuditLog({
+        await get().addAuditLog({
           adminId,
           adminNome,
           doctorId: id,
@@ -300,6 +337,41 @@ export const useAdminStore = create<AdminStore>()(
           acao: 'medico_deletado',
           detalhes: `Médico "${doctor.nome}" removido do sistema`,
         });
+      },
+
+      updatePlan: async (plan) => {
+        await adminRepo.updatePlan(plan);
+        set(state => ({
+          plans: state.plans.map(p => p.id === plan.id ? plan : p)
+        }));
+      },
+
+      createPlan: async (planData) => {
+        const newPlan = await adminRepo.createPlan(planData);
+        set(state => ({
+          plans: [...state.plans, newPlan]
+        }));
+      },
+
+      deletePlan: async (id) => {
+        await adminRepo.deletePlan(id);
+        set(state => ({
+          plans: state.plans.filter(p => p.id !== id)
+        }));
+      },
+
+      updateAddon: async (addon) => {
+        await adminRepo.updateAddon(addon);
+        set(state => ({
+          addons: state.addons.map(a => a.id === addon.id ? addon : a)
+        }));
+      },
+
+      createAddon: async (addonData) => {
+        const newAddon = await adminRepo.createAddon(addonData);
+        set(state => ({
+          addons: [...state.addons, newAddon]
+        }));
       },
 
       getAuditLogs: () => get().auditLogs.sort((a, b) => 
@@ -311,16 +383,9 @@ export const useAdminStore = create<AdminStore>()(
           .filter(log => log.doctorId === doctorId)
           .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime()),
 
-      addAuditLog: (log) => {
-        const newLog: AuditLog = {
-          ...log,
-          id: `audit-${Date.now()}`,
-          criadoEm: new Date(),
-        };
-
-        set(state => ({
-          auditLogs: [newLog, ...state.auditLogs],
-        }));
+      addAuditLog: async (log) => {
+        await adminRepo.createAuditLog(log);
+        get().fetchAuditLogs();
       },
 
       getStats: () => {
@@ -340,6 +405,16 @@ export const useAdminStore = create<AdminStore>()(
     }),
     {
       name: 'pronti-admin',
+      partialize: (state) => ({
+        // Persistir apenas configurações que não mudam frequentemente ou não são sensíveis a Date serialization
+        // Evitar persistir listas completas que podem conter Dates
+        // No caso do admin, as listas são menos críticas para offline first, mas podem causar o mesmo bug
+        // doctors, plans, addons podem ser persistidos se tratarmos as datas na reidratação
+        // Por segurança, vamos evitar persistir dados dinâmicos complexos
+        plans: state.plans,
+        addons: state.addons,
+        // doctors e auditLogs carregam muitos dados com datas, melhor buscar sempre
+      }),
     }
   )
 );

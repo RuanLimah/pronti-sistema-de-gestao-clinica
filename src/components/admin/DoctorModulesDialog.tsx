@@ -20,7 +20,8 @@ import {
   PauseCircle,
   Ban
 } from "lucide-react";
-import { Doctor, DoctorModules, useAdminStore } from "@/stores/adminStore";
+import { useAdminStore } from "@/stores/adminStore";
+import { Doctor, DoctorModules } from "@/types/admin";
 
 interface DoctorModulesDialogProps {
   doctor: Doctor | null;

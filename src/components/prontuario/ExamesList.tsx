@@ -70,6 +70,18 @@ export function ExamesList({ exames, onAddClick, onDelete }: ExamesListProps) {
   const [viewExame, setViewExame] = useState<ExameMedico | null>(null);
   const [deleteExame, setDeleteExame] = useState<ExameMedico | null>(null);
 
+  // Helper para formatar datas com segurança
+  const formatDate = (date: Date | string | undefined, options?: Intl.DateTimeFormatOptions) => {
+    if (!date) return 'Data inválida';
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return 'Data inválida';
+      return d.toLocaleDateString('pt-BR', options);
+    } catch (e) {
+      return 'Data inválida';
+    }
+  };
+
   // Filtrar exames
   const examesFiltrados = useMemo(() => {
     return exames
@@ -80,7 +92,7 @@ export function ExamesList({ exames, onAddClick, onDelete }: ExamesListProps) {
           if (
             !exame.nome.toLowerCase().includes(search) &&
             !exame.descricao?.toLowerCase().includes(search) &&
-            !exame.arquivo.nome.toLowerCase().includes(search)
+            !exame.arquivo?.nome?.toLowerCase().includes(search)
           ) {
             return false;
           }
@@ -112,20 +124,37 @@ export function ExamesList({ exames, onAddClick, onDelete }: ExamesListProps) {
   }, [exames, searchTerm, filtroTipo, filtroData]);
 
   const handleDownload = (exame: ExameMedico) => {
+    if (!exame.arquivo?.url) {
+      console.error("URL do arquivo não encontrada");
+      return;
+    }
     const link = document.createElement("a");
     link.href = exame.arquivo.url;
-    link.download = exame.arquivo.nome;
+    link.download = exame.arquivo.nome || "download";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   const handleView = (exame: ExameMedico) => {
-    if (isImageFile(exame.arquivo.tipo)) {
+    if (!exame?.arquivo) {
+       console.error("Exame sem arquivo");
+       return;
+    }
+
+    const tipo = exame.arquivo.tipo || '';
+    const url = exame.arquivo.url;
+
+    if (!url) {
+      console.error("URL do arquivo não encontrada");
+      return;
+    }
+
+    if (isImageFile(tipo)) {
       setViewExame(exame);
     } else {
       // Para PDFs e outros, abrir em nova aba
-      window.open(exame.arquivo.url, "_blank");
+      window.open(url, "_blank");
     }
   };
 
@@ -243,63 +272,67 @@ export function ExamesList({ exames, onAddClick, onDelete }: ExamesListProps) {
                 {examesFiltrados.map((exame) => (
                   <div
                     key={exame.id}
-                    className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors group"
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors group"
                   >
-                    {/* Ícone / Thumbnail */}
-                    <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {isImageFile(exame.arquivo.tipo) ? (
-                        <img
-                          src={exame.arquivo.url}
-                          alt={exame.nome}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-2xl">{getFileIcon(exame.arquivo.tipo)}</span>
-                      )}
-                    </div>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Ícone / Thumbnail */}
+                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border border-border/50">
+                        {isImageFile(exame.arquivo?.tipo || '') ? (
+                          <img
+                            src={exame.arquivo?.url}
+                            alt={exame.nome}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              // Fallback se a imagem falhar
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : (
+                          <span className="text-2xl">{getFileIcon(exame.arquivo?.tipo || '')}</span>
+                        )}
+                        {/* Fallback oculto inicialmente */}
+                        <span className="hidden text-2xl">📄</span>
+                      </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium text-sm truncate">
-                          {exame.nome}
-                        </p>
-                        <Badge variant="outline" className="text-xs flex-shrink-0">
-                          {getTipoIcon(exame.tipo)} {getTipoLabel(exame.tipo)}
-                        </Badge>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm truncate max-w-[200px] sm:max-w-[300px]" title={exame.nome}>
+                            {exame.nome}
+                          </p>
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 flex-shrink-0">
+                            {getTipoLabel(exame.tipo)}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1 whitespace-nowrap">
+                            <Calendar className="h-3 w-3" />
+                            {formatDate(exame.criadoEm)}
+                          </span>
+                          <span className="flex items-center gap-1 whitespace-nowrap">
+                            <File className="h-3 w-3" />
+                            {formatFileSize(exame.arquivo?.tamanho || 0)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(exame.criadoEm).toLocaleDateString("pt-BR")}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <File className="h-3 w-3" />
-                          {formatFileSize(exame.arquivo.tamanho)}
-                        </span>
-                      </div>
-                      {exame.descricao && (
-                        <p className="text-xs text-muted-foreground mt-1 truncate">
-                          {exame.descricao}
-                        </p>
-                      )}
                     </div>
 
                     {/* Ações */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1 sm:gap-2 flex-shrink-0 pl-2">
                       <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 shrink-0"
                         onClick={() => handleView(exame)}
                         title="Visualizar"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 shrink-0"
                         onClick={() => handleDownload(exame)}
                         title="Download"
                       >
@@ -307,7 +340,7 @@ export function ExamesList({ exames, onAddClick, onDelete }: ExamesListProps) {
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -344,32 +377,45 @@ export function ExamesList({ exames, onAddClick, onDelete }: ExamesListProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ImageIcon className="h-5 w-5" />
-              {viewExame?.nome}
+              {viewExame?.nome || 'Visualização de Exame'}
             </DialogTitle>
           </DialogHeader>
-          {viewExame && (
+          {viewExame && viewExame.arquivo && (
             <div className="flex flex-col items-center gap-4">
-              <img
-                src={viewExame.arquivo.url}
-                alt={viewExame.nome}
-                className="max-w-full max-h-[60vh] object-contain rounded-lg"
-              />
+              {viewExame.arquivo.url ? (
+                <img
+                  src={viewExame.arquivo.url}
+                  alt={viewExame.nome}
+                  className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                  onError={(e) => {
+                     (e.target as HTMLImageElement).src = ''; // Clear source
+                     (e.target as HTMLImageElement).alt = 'Erro ao carregar imagem';
+                  }}
+                />
+              ) : (
+                <div className="h-64 w-full flex items-center justify-center bg-muted rounded-lg">
+                  <span className="text-muted-foreground">Imagem não disponível</span>
+                </div>
+              )}
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span>
-                  {new Date(viewExame.criadoEm).toLocaleDateString("pt-BR", {
+                  {formatDate(viewExame.criadoEm, {
                     day: "2-digit",
                     month: "long",
                     year: "numeric",
                   })}
                 </span>
-                <span>{formatFileSize(viewExame.arquivo.tamanho)}</span>
+                <span>{formatFileSize(viewExame.arquivo.tamanho || 0)}</span>
               </div>
               {viewExame.descricao && (
                 <p className="text-sm text-center text-muted-foreground">
                   {viewExame.descricao}
                 </p>
               )}
-              <Button onClick={() => handleDownload(viewExame)}>
+              <Button 
+                onClick={() => handleDownload(viewExame)}
+                disabled={!viewExame.arquivo.url}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Download
               </Button>

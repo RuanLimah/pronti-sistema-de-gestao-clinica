@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,9 +87,18 @@ export default function Agenda() {
     cancelarAtendimento,
     verificarHorarioDisponivel,
     isAtendimentoPassado,
+    fetchAtendimentos,
+    fetchPacientes,
   } = useDataStore();
 
   const medicoId = user?.id || "";
+
+  useEffect(() => {
+    if (medicoId) {
+      fetchPacientes(medicoId);
+      fetchAtendimentos(medicoId);
+    }
+  }, [medicoId, fetchPacientes, fetchAtendimentos]);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [view, setView] = useState<"day" | "week">("day");
@@ -189,7 +198,7 @@ export default function Agenda() {
     setNovoAtendimentoOpen(true);
   };
 
-  const handleAddAtendimento = () => {
+  const handleAddAtendimento = async () => {
     if (!selectedSlot || !selectedPaciente) {
       toast({
         title: "Erro",
@@ -199,7 +208,7 @@ export default function Agenda() {
       return;
     }
 
-    const result = addAtendimento({
+    const result = await addAtendimento({
       pacienteId: selectedPaciente,
       medicoId,
       data: selectedSlot.data,

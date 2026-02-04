@@ -1,91 +1,97 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, X, Star, Zap, Users, Crown } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
-const plans = [
-  {
-    name: "Gratuito",
-    subtitle: "Para conhecer",
-    price: "0",
-    icon: Zap,
-    color: "slate",
-    features: [
-      { text: "Agenda básica", included: true },
-      { text: "Até 10 pacientes", included: true },
-      { text: "10 atendimentos/mês", included: true },
-      { text: "Prontuário básico", included: true },
-      { text: "Financeiro", included: false },
-      { text: "Relatórios", included: false },
-    ],
-    cta: "Começar grátis",
-    popular: false,
-  },
-  {
-    name: "Essencial",
-    subtitle: "COMEÇAR",
-    price: "79",
-    icon: Star,
-    color: "emerald",
-    features: [
-      { text: "Agenda completa", included: true },
-      { text: "Até 50 pacientes", included: true },
-      { text: "Prontuário digital", included: true },
-      { text: "Financeiro básico", included: true },
-      { text: "Relatórios simples", included: true },
-      { text: "Suporte por email", included: true },
-      { text: "Auditoria", included: false },
-      { text: "Exportação PDF", included: false },
-    ],
-    cta: "Assinar Essencial",
-    popular: false,
-  },
-  {
-    name: "Profissional",
-    subtitle: "CRESCER",
-    price: "149",
-    icon: Crown,
-    color: "teal",
-    features: [
-      { text: "Tudo do Essencial +", included: true },
-      { text: "Pacientes ilimitados", included: true },
-      { text: "Financeiro avançado", included: true },
-      { text: "Relatórios completos", included: true },
-      { text: "Exportação PDF", included: true },
-      { text: "Auditoria completa", included: true },
-      { text: "Suporte prioritário", included: true },
-    ],
-    cta: "Assinar Profissional",
-    popular: true,
-  },
-  {
-    name: "Clínica",
-    subtitle: "ESCALAR",
-    price: "299",
-    icon: Users,
-    color: "indigo",
-    features: [
-      { text: "Tudo do Profissional +", included: true },
-      { text: "Múltiplos profissionais", included: true },
-      { text: "Gestão de equipe", included: true },
-      { text: "Relatórios gerenciais", included: true },
-      { text: "API de integração", included: true },
-      { text: "Suporte dedicado", included: true },
-      { text: "Treinamento incluso", included: true },
-    ],
-    cta: "Falar com vendas",
-    popular: false,
-  },
-];
+interface PlanFeature {
+  text: string;
+  included: boolean;
+}
 
-const addOns = [
-  { name: "WhatsApp Automático", price: "29,90" },
-  { name: "Armazenamento Extra", price: "19,90" },
-  { name: "Relatórios Avançados", price: "14,90" },
-];
+interface Plan {
+  id: string;
+  name: string;
+  subtitle: string;
+  price: number;
+  marketing_features: PlanFeature[];
+  highlighted: boolean;
+  type: string;
+  cta?: string; // Optional, can be derived
+}
+
+interface Addon {
+  id: string;
+  name: string;
+  price: number;
+}
+
+const getIcon = (type: string) => {
+  switch (type) {
+    case 'gratuito': return Zap;
+    case 'essencial': return Star;
+    case 'profissional': return Crown;
+    case 'clinica': return Users;
+    default: return Star;
+  }
+};
+
+const getColor = (type: string) => {
+  switch (type) {
+    case 'gratuito': return "slate";
+    case 'essencial': return "emerald";
+    case 'profissional': return "teal";
+    case 'clinica': return "indigo";
+    default: return "slate";
+  }
+};
+
+const getCta = (type: string) => {
+  switch (type) {
+    case 'gratuito': return "Começar grátis";
+    case 'essencial': return "Assinar Essencial";
+    case 'profissional': return "Assinar Profissional";
+    case 'clinica': return "Falar com vendas";
+    default: return "Assinar";
+  }
+};
 
 export function PricingSection() {
   const navigate = useNavigate();
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [addons, setAddons] = useState<Addon[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const { data: plansData } = await supabase
+          .from('plans')
+          .select('*')
+          .eq('active', true)
+          .order('price', { ascending: true });
+
+        const { data: addonsData } = await supabase
+          .from('addons')
+          .select('*')
+          .eq('active', true)
+          .order('price', { ascending: true });
+
+        if (plansData) setPlans(plansData);
+        if (addonsData) setAddons(addonsData);
+      } catch (error) {
+        console.error('Error fetching pricing:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  if (isLoading) {
+    return <div className="py-20 text-center">Carregando planos...</div>;
+  }
 
   return (
     <section id="planos" className="py-20 md:py-28 bg-background">
@@ -104,68 +110,75 @@ export function PricingSection() {
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto mb-16">
-          {plans.map((plan, index) => (
-            <div
-              key={index}
-              className={`relative bg-card rounded-2xl p-6 border-2 transition-all duration-300 animate-fade-in ${
-                plan.popular 
-                  ? "border-primary shadow-xl shadow-primary/20 scale-105 lg:scale-110 z-10" 
-                  : "border-border hover:border-muted-foreground/30 hover:shadow-lg"
-              }`}
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-1 text-sm shadow-lg">
-                    ⭐ Mais popular
-                  </Badge>
-                </div>
-              )}
+          {plans.map((plan, index) => {
+            const Icon = getIcon(plan.type);
+            const color = getColor(plan.type);
+            const cta = getCta(plan.type);
+            const isPopular = plan.highlighted;
 
-              <div className="text-center mb-6">
-                <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 ${
-                  plan.popular 
-                    ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white" 
-                    : "bg-secondary text-muted-foreground"
-                }`}>
-                  <plan.icon className="h-6 w-6" />
-                </div>
-                <h3 className="font-display text-xl font-bold text-foreground">{plan.name}</h3>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">{plan.subtitle}</p>
-                <div className="mt-4">
-                  <span className="text-sm text-muted-foreground">R$</span>
-                  <span className="text-4xl font-bold text-foreground mx-1">{plan.price}</span>
-                  <span className="text-sm text-muted-foreground">/mês</span>
-                </div>
-              </div>
-
-              <ul className="space-y-3 mb-6">
-                {plan.features.map((feature, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    {feature.included ? (
-                      <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
-                    ) : (
-                      <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
-                    )}
-                    <span className={feature.included ? "text-foreground" : "text-muted-foreground"}>
-                      {feature.text}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button
-                className={`w-full ${
-                  plan.popular 
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg" 
-                    : "bg-secondary text-foreground hover:bg-secondary/80"
+            return (
+              <div
+                key={plan.id}
+                className={`relative bg-card rounded-2xl p-6 border-2 transition-all duration-300 animate-fade-in ${
+                  isPopular 
+                    ? "border-primary shadow-xl shadow-primary/20 scale-105 lg:scale-110 z-10" 
+                    : "border-border hover:border-muted-foreground/30 hover:shadow-lg"
                 }`}
-                onClick={() => navigate("/login?mode=signup")}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
-                {plan.cta}
-              </Button>
-            </div>
-          ))}
+                {isPopular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-1 text-sm shadow-lg">
+                      ⭐ Mais popular
+                    </Badge>
+                  </div>
+                )}
+
+                <div className="text-center mb-6">
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 ${
+                    isPopular 
+                      ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white" 
+                      : "bg-secondary text-muted-foreground"
+                  }`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="font-display text-xl font-bold text-foreground">{plan.name}</h3>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">{plan.subtitle}</p>
+                  <div className="mt-4">
+                    <span className="text-sm text-muted-foreground">R$</span>
+                    <span className="text-4xl font-bold text-foreground mx-1">{plan.price}</span>
+                    <span className="text-sm text-muted-foreground">/mês</span>
+                  </div>
+                </div>
+
+                <ul className="space-y-3 mb-6">
+                  {plan.marketing_features && plan.marketing_features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm">
+                      {feature.included ? (
+                        <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
+                      ) : (
+                        <X className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                      )}
+                      <span className={feature.included ? "text-foreground" : "text-muted-foreground"}>
+                        {feature.text}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  className={`w-full ${
+                    isPopular 
+                      ? "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg" 
+                      : "bg-secondary text-foreground hover:bg-secondary/80"
+                  }`}
+                  onClick={() => navigate("/login?mode=signup")}
+                >
+                  {cta}
+                </Button>
+              </div>
+            );
+          })}
         </div>
 
         {/* Add-ons */}
@@ -180,7 +193,7 @@ export function PricingSection() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {addOns.map((addon, index) => (
+            {addons.map((addon, index) => (
               <div
                 key={index}
                 className="flex items-center justify-between bg-secondary/50 rounded-xl p-4 border border-border"

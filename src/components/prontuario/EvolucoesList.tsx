@@ -88,6 +88,29 @@ export function EvolucoesList({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [evolucaoToDelete, setEvolucaoToDelete] = useState<Prontuario | null>(null);
 
+  // Helper para formatar datas com segurança
+  const formatDate = (date: Date | string | undefined, options?: Intl.DateTimeFormatOptions) => {
+    if (!date) return 'Data inválida';
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return 'Data inválida';
+      return d.toLocaleDateString('pt-BR', options);
+    } catch (e) {
+      return 'Data inválida';
+    }
+  };
+
+  const formatTime = (date: Date | string | undefined, options?: Intl.DateTimeFormatOptions) => {
+    if (!date) return '';
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('pt-BR', options);
+    } catch (e) {
+      return '';
+    }
+  };
+
   // Filtrar evoluções
   const evolucoesFiltradas = useMemo(() => {
     if (filtroTipo === 'todos') return prontuarios;
@@ -326,14 +349,14 @@ export function EvolucoesList({
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Calendar className="h-3 w-3" />
-                        {new Date(prontuario.criadoEm).toLocaleDateString('pt-BR', {
+                        {formatDate(prontuario.criadoEm, {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric',
                         })}
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {new Date(prontuario.criadoEm).toLocaleTimeString('pt-BR', {
+                          {formatTime(prontuario.criadoEm, {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
@@ -396,7 +419,7 @@ export function EvolucoesList({
               className="min-h-[200px]"
             />
             <p className="text-xs text-muted-foreground mt-2">
-              Data: {new Date().toLocaleDateString('pt-BR', {
+              Data: {formatDate(new Date(), {
                 day: '2-digit',
                 month: 'long',
                 year: 'numeric',

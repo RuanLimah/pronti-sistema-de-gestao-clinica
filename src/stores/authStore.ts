@@ -32,6 +32,70 @@ interface AuthStore {
   getFeatureFlags: () => PlanResources;
   hasFeature: (feature: keyof PlanResources) => boolean;
   checkPlanLimit: (feature: string, currentCount?: number) => { allowed: boolean; message?: string };
+  
+  // Initialization
+  isInitialized: boolean;
+  initializeAuthListener: () => () => void;
+}
+
+// Helper to ensure client record exists
+async function ensureClientExists(userId: string, email: string) {
+  try {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (client) return;
+
+    // Get default plan (Free)
+    // Priority: 'free' only
+    let { data: plan } = await supabase
+      .from('plans')
+      .select('id')
+      .eq('type', 'free')
+      .single();
+
+    if (!plan) {
+      console.log('Default plan (free) not found, creating FREE plan...');
+      // Create FREE plan if not exists
+      const { data: newPlan, error: createPlanError } = await supabase
+        .from('plans')
+        .insert({
+          name: 'Plano Gratuito',
+          type: 'free',
+          price: 0,
+          active: true,
+          features: ['agenda_simples', 'prontuario_basico'],
+          limits: { max_patients: 5, max_medical_records: 50, max_users: 1 }
+        })
+        .select('id')
+        .single();
+      
+      if (createPlanError || !newPlan) {
+        console.error('Error creating default plan:', createPlanError);
+        return;
+      }
+      plan = newPlan;
+    }
+
+    // Create client
+    const { error } = await supabase.from('clients').insert({
+      id: userId,
+      email: email,
+      plan_id: plan.id,
+      role: 'CLIENTE',
+      status: 'active',
+      subscription_status: 'trial'
+    });
+
+    if (error) {
+      console.error('Error creating client record:', error);
+    }
+  } catch (err) {
+    console.error('Unexpected error in ensureClientExists:', err);
+  }
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -41,9 +105,41 @@ export const useAuthStore = create<AuthStore>()(
       plan: null,
       subscription: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true, // Start with loading true
+      isInitialized: false,
       systemRole: null,
       clienteId: null,
+
+      initializeAuthListener: () => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          console.log('Auth event:', event);
+          
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (session) {
+               // Only refresh if user is missing or we want to ensure sync
+               const { user } = get();
+               if (!user || user.id !== session.user.id) {
+                  await get().checkSession();
+               }
+            }
+          } else if (event === 'SIGNED_OUT') {
+            set({ 
+              user: null, 
+              plan: null, 
+              subscription: null, 
+              isAuthenticated: false, 
+              systemRole: null, 
+              clienteId: null,
+              isInitialized: true,
+              isLoading: false
+            });
+            // Clear other stores if needed?
+            // useDataStore.getState().clear(); // If we had access
+          }
+        });
+        
+        return () => subscription.unsubscribe();
+      },
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -62,6 +158,9 @@ export const useAuthStore = create<AuthStore>()(
 
           // Fetch profile and client data
           const userId = session.user.id;
+
+          // Ensure client record exists
+          await ensureClientExists(userId, email);
           
           // 1. Fetch Profile
           const { data: profile, error: profileError } = await supabase
@@ -187,6 +286,11 @@ export const useAuthStore = create<AuthStore>()(
             // Trigger on database should handle profile creation.
             // We can optionally create a client record if needed for legacy support, 
             // but for now we rely on the profiles table as requested.
+
+            // Try to ensure client record exists immediately (best effort)
+            // This ensures the user appears in Admin > Clients list even before first login
+            // Note: This might fail if RLS prevents insertion, but it's worth a try.
+            await ensureClientExists(data.user.id, email);
             
             // If session is returned (Auto Confirm enabled), log them in immediately
             if (data.session) {
@@ -220,21 +324,31 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       checkSession: async () => {
-        const { data: { session } } = await supabase.auth.getSession();
+        // Only set loading if not already authenticated (to avoid flickering on refresh if persisted)
+        if (!get().isAuthenticated) {
+           set({ isLoading: true });
+        }
         
-        if (session) {
-           const { user } = get();
-           // If we have a session but no user data in store (or we want to refresh)
-           if (!user || !get().isAuthenticated) {
-             // We need to fetch user data similar to login
-             // We can extract the logic or just re-implement a fetch here
-             // For simplicity/safety, let's reuse a fetch logic
-             // But we can't call 'login' because it requires password
-             
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (error) throw error;
+
+          if (session) {
+             // If we already have a user and it matches the session, just ensure isInitialized
+             const { user } = get();
+             if (user && user.id === session.user.id && get().isAuthenticated) {
+                set({ isInitialized: true, isLoading: false });
+                return;
+             }
+
              // Reuse fetch logic:
              try {
                 const userId = session.user.id;
                 const email = session.user.email || '';
+
+                // Ensure client record exists
+                await ensureClientExists(userId, email);
                 
                 // 1. Fetch Profile
                 const { data: profile, error: profileError } = await supabase
@@ -319,14 +433,35 @@ export const useAuthStore = create<AuthStore>()(
                   subscription: subscriptionData,
                   isAuthenticated: true,
                   isLoading: false,
+                  isInitialized: true,
                   systemRole: systemRole,
                   clienteId: systemRole === 'cliente' ? userId : null,
                 });
-             } catch (err) {
-               console.error('Session restoration error:', err);
-               set({ isLoading: false });
+             } catch (fetchError) {
+                console.error('Error fetching user data in checkSession:', fetchError);
+                // Keep session but maybe retry? Or logout?
+                // For now, allow it but log error
+                set({ isLoading: false, isInitialized: true });
              }
-           }
+          } else {
+             // No session
+             set({ 
+               user: null, 
+               plan: null,
+               subscription: null,
+               isAuthenticated: false, 
+               isLoading: false,
+               isInitialized: true 
+             });
+          }
+        } catch (err) {
+          console.error('Session check failed:', err);
+          set({ 
+            user: null, 
+            isAuthenticated: false, 
+            isLoading: false,
+            isInitialized: true
+          });
         }
       },
 

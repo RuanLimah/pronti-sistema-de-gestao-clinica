@@ -31,7 +31,7 @@ import {
   Upload,
   FlaskConical,
 } from "lucide-react";
-import { useDataStore, Prontuario, ExameMedico } from "@/stores/dataStore";
+import { useDataStore, ExameMedico } from "@/stores/dataStore";
 import { toast } from "@/hooks/use-toast";
 import { exportProntuarioPdf } from "@/lib/pdfExport";
 import { EvolucoesList } from "@/components/prontuario/EvolucoesList";
@@ -40,70 +40,161 @@ import { ExameUploadModal } from "@/components/prontuario/ExameUploadModal";
 import { useAuthStore } from "@/stores/authStore";
 
 export default function ProntuarioPage() {
-  const { id } = useParams<{ id: string }>();
+  const { pacienteId } = useParams<{ pacienteId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isAdmin, isLoading: authLoading } = useAuthStore();
+  const [isLoading, setIsLoading] = useState(true);
   
   const { 
-    getPacienteById, 
     updatePaciente, 
-    getProntuariosByPaciente, 
     addProntuario,
     updateProntuario,
     deleteProntuario,
-    getAtendimentosByPaciente,
-    getExamesByPaciente,
     addExame,
     deleteExame,
     fetchProntuarios,
     fetchExames,
     fetchAtendimentos,
-    fetchPacientes
+    fetchAtendimentosByPaciente,
+    fetchPacienteById
   } = useDataStore();
 
-  useEffect(() => {
-    if (user?.id && id) {
-      // Ensure patient data is loaded
-      fetchPacientes(user.id);
-      fetchProntuarios(id);
-      fetchExames(id);
-      fetchAtendimentos(user.id);
+  const pacientes = useDataStore(state => state.pacientes) || [];
+  const paciente = useMemo(() => 
+    pacientes.find(p => p.id === pacienteId),
+    [pacientes, pacienteId]
+  );
+
+  console.log("ProntuarioPage render:", { pacienteId, authLoading, isLoading, hasPaciente: !!paciente });
+
+  const loadData = async () => {
+    if (!pacienteId) {
+      console.error("ID do paciente não fornecido na rota");
+      setIsLoading(false);
+      return;
     }
-  }, [user?.id, id, fetchProntuarios, fetchExames, fetchAtendimentos, fetchPacientes]);
 
-  const paciente = getPacienteById(id || "");
+    setIsLoading(true);
+
+    try {
+      // 1. Validar e buscar paciente (Fonte da Verdade: DB via ID)
+      console.log(`Buscando paciente: ${pacienteId}`);
+      
+      // Busca direta no banco. Se não existir, retorna null e paramos aqui.
+      const pacienteEncontrado = await fetchPacienteById(pacienteId);
+      
+      if (!pacienteEncontrado) {
+        console.error("Paciente não encontrado no banco de dados (fetchPacienteById retornou null)");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Paciente encontrado:", pacienteEncontrado.nome);
+
+      // 2. Carregar dados relacionados EM ORDEM SEQUENCIAL OBRIGATÓRIA
+      // O usuário exigiu: 1. validar -> 2. fetchPaciente -> 3. Prontuarios -> 4. Exames -> 5. Atendimentos
+      
+      console.log("Carregando dados relacionados...");
+      await Promise.allSettled([
+        fetchProntuarios(pacienteId),
+        fetchExames(pacienteId),
+        fetchAtendimentosByPaciente(pacienteId)
+      ]);
+      console.log("Dados relacionados carregados.");
+    } catch (error) {
+      console.error("Erro geral no carregamento do prontuário:", error);
+      toast({
+        title: "Erro",
+        description: "Falha ao carregar dados do prontuário.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!pacienteId) return;
+    loadData();
+  }, [pacienteId]);
   
-  // Prontuários ordenados
+  const allProntuarios = useDataStore(state => state.prontuarios) || [];
   const prontuarios = useMemo(() => 
-    getProntuariosByPaciente(id || "").sort((a, b) => 
-      new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime()
-    ), [id, getProntuariosByPaciente]
+    allProntuarios
+      .filter(p => p.pacienteId === pacienteId)
+      .sort((a, b) => {
+        const dateA = new Date(a.criadoEm || 0);
+        const dateB = new Date(b.criadoEm || 0);
+        return dateB.getTime() - dateA.getTime();
+      }),
+    [allProntuarios, pacienteId]
   );
 
-  // Exames ordenados
+  const allExames = useDataStore(state => state.exames) || [];
   const exames = useMemo(() => 
-    getExamesByPaciente(id || "").sort((a, b) => 
-      new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime()
-    ), [id, getExamesByPaciente]
+    allExames
+      .filter(e => e.pacienteId === pacienteId)
+      .sort((a, b) => {
+        const dateA = new Date(a.criadoEm || 0);
+        const dateB = new Date(b.criadoEm || 0);
+        return dateB.getTime() - dateA.getTime();
+      }),
+    [allExames, pacienteId]
   );
 
-  // Atendimentos realizados
+  const allAtendimentos = useDataStore(state => state.atendimentos) || [];
   const atendimentos = useMemo(() => 
-    getAtendimentosByPaciente(id || "").filter(a => a.status === 'realizado')
-      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
-  , [id, getAtendimentosByPaciente]);
+    allAtendimentos
+      .filter(a => a.pacienteId === pacienteId)
+      .sort((a, b) => {
+        const dateA = new Date(a.data || 0);
+        const dateB = new Date(b.data || 0);
+        return dateB.getTime() - dateA.getTime();
+      }),
+    [allAtendimentos, pacienteId]
+  );
 
-  // Estado para edição dos dados clínicos
-  const [isEditing, setIsEditing] = useState(false);
+  // Estado local para edição de dados clínicos
   const [clinicalData, setClinicalData] = useState({
-    queixaPrincipal: paciente?.queixaPrincipal || "",
-    historicoDoencaAtual: paciente?.historicoDoencaAtual || "",
-    antecedentesPessoais: paciente?.antecedentesPessoais || "",
-    antecedentesFamiliares: paciente?.antecedentesFamiliares || "",
-    alergias: paciente?.alergias || "",
-    medicamentosEmUso: paciente?.medicamentosEmUso || "",
-    observacoesGerais: paciente?.observacoesGerais || "",
+    queixaPrincipal: "",
+    historicoDoencaAtual: "",
+    antecedentesPessoais: "",
+    antecedentesFamiliares: "",
+    alergias: "",
+    medicamentosEmUso: "",
+    observacoesGerais: "",
   });
+
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Atualiza dados clínicos quando paciente mudar
+  useEffect(() => {
+    if (paciente) {
+      setClinicalData((prev) => {
+        const newData = {
+          queixaPrincipal: paciente.queixaPrincipal || "",
+          historicoDoencaAtual: paciente.historicoDoencaAtual || "",
+          antecedentesPessoais: paciente.antecedentesPessoais || "",
+          antecedentesFamiliares: paciente.antecedentesFamiliares || "",
+          alergias: paciente.alergias || "",
+          medicamentosEmUso: paciente.medicamentosEmUso || "",
+          observacoesGerais: paciente.observacoesGerais || "",
+        };
+
+        // Comparação superficial para evitar updates desnecessários
+        const hasChanged = 
+          prev.queixaPrincipal !== newData.queixaPrincipal ||
+          prev.historicoDoencaAtual !== newData.historicoDoencaAtual ||
+          prev.antecedentesPessoais !== newData.antecedentesPessoais ||
+          prev.antecedentesFamiliares !== newData.antecedentesFamiliares ||
+          prev.alergias !== newData.alergias ||
+          prev.medicamentosEmUso !== newData.medicamentosEmUso ||
+          prev.observacoesGerais !== newData.observacoesGerais;
+
+        return hasChanged ? newData : prev;
+      });
+    }
+  }, [paciente]);
 
   // Modal de upload de exame
   const [uploadExameOpen, setUploadExameOpen] = useState(false);
@@ -111,21 +202,50 @@ export default function ProntuarioPage() {
   // Tab ativa
   const [activeTab, setActiveTab] = useState("evolucoes");
 
+  // Helper para formatar datas com segurança
+  const formatDate = (date: Date | string | undefined) => {
+    if (!date) return 'Data inválida';
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return 'Data inválida';
+      return d.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return 'Data inválida';
+    }
+  };
+
+  if (isLoading || authLoading) {
+    return (
+      <DashboardLayout title="Prontuário" subtitle="Carregando...">
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="text-muted-foreground animate-pulse">Carregando informações do paciente...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (!paciente) {
     return (
       <DashboardLayout title="Prontuário" subtitle="Paciente não encontrado">
         <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-muted-foreground mb-4">Paciente não encontrado.</p>
-          <Button onClick={() => navigate("/pacientes")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Voltar para Pacientes
-          </Button>
+          <p className="text-muted-foreground mb-4">Paciente não encontrado ou você não tem permissão para acessá-lo.</p>
+          <div className="flex gap-4">
+            <Button onClick={() => navigate("/pacientes")}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para Pacientes
+            </Button>
+            <Button variant="outline" onClick={loadData}>
+              Tentar Novamente
+            </Button>
+          </div>
         </div>
       </DashboardLayout>
     );
   }
 
   const handleSaveClinicalData = () => {
+    if (!paciente) return;
     updatePaciente(paciente.id, clinicalData);
     setIsEditing(false);
     toast({
@@ -135,25 +255,35 @@ export default function ProntuarioPage() {
   };
 
   const handleAddEvolucao = async (texto: string) => {
+    if (!paciente || !user?.id) return;
     await addProntuario({
       pacienteId: paciente.id,
+      medicoId: user.id,
       texto,
+      profissionalNome: user.nome || 'Profissional',
     });
   };
 
   const handleEditEvolucao = async (id: string, texto: string) => {
+    if (!paciente) return;
     await updateProntuario(id, { texto });
   };
 
   const handleDeleteEvolucao = async (id: string) => {
+    if (!paciente) return;
     await deleteProntuario(id);
   };
 
   const handleUploadExame = async (exameData: Omit<ExameMedico, 'id' | 'criadoEm'>) => {
-    await addExame(exameData);
+    if (!paciente || !user?.id) return;
+    await addExame({
+      ...exameData,
+      medicoId: user.id,
+    });
   };
 
   const handleDeleteExame = (id: string) => {
+    if (!paciente) return;
     deleteExame(id);
     toast({
       title: "Exame excluído",
@@ -162,6 +292,7 @@ export default function ProntuarioPage() {
   };
 
   const handleExportPdf = () => {
+    if (!paciente) return;
     exportProntuarioPdf(paciente, prontuarios, clinicalData);
     toast({
       title: "PDF gerado",
@@ -233,7 +364,7 @@ export default function ProntuarioPage() {
                   <div>
                     <p className="text-muted-foreground">Cadastro</p>
                     <p className="font-medium">
-                      {new Date(paciente.criadoEm).toLocaleDateString('pt-BR')}
+                      {formatDate(paciente.criadoEm)}
                     </p>
                   </div>
                   <div>
@@ -479,7 +610,7 @@ export default function ProntuarioPage() {
                         <AccordionTrigger className="text-sm hover:no-underline">
                           <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            {new Date(atendimento.data).toLocaleDateString('pt-BR')} - {atendimento.hora}
+                            {formatDate(atendimento.data)} - {atendimento.hora}
                           </div>
                         </AccordionTrigger>
                         <AccordionContent>

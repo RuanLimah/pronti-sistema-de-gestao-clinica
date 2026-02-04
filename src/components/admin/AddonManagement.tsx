@@ -1,6 +1,6 @@
 // ============= PRONTI - Gestão de Add-ons =============
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,18 +29,8 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-interface Addon {
-  id: string;
-  nome: string;
-  slug: string;
-  descricao: string;
-  valor: number;
-  icon: string;
-  ativo: boolean;
-  assinantes: number;
-  categoria: 'comunicacao' | 'armazenamento' | 'relatorios' | 'gestao' | 'personalizacao';
-}
+import { useAdminStore } from '@/stores/adminStore';
+import { Addon } from '@/types/admin';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   'message-square': MessageSquare,
@@ -67,81 +57,15 @@ const categoryLabels = {
   personalizacao: 'Personalização',
 };
 
-// Mock data
-const initialAddons: Addon[] = [
-  {
-    id: 'addon-1',
-    nome: 'WhatsApp Automático',
-    slug: 'whatsapp-auto',
-    descricao: 'Lembretes automáticos, confirmação de consulta e mensagens personalizadas via WhatsApp.',
-    valor: 29.90,
-    icon: 'message-square',
-    ativo: true,
-    assinantes: 89,
-    categoria: 'comunicacao',
-  },
-  {
-    id: 'addon-2',
-    nome: 'Armazenamento Extra',
-    slug: 'storage-extra',
-    descricao: 'Expansão de espaço para exames, documentos, PDFs e imagens médicas.',
-    valor: 19.90,
-    icon: 'hard-drive',
-    ativo: true,
-    assinantes: 56,
-    categoria: 'armazenamento',
-  },
-  {
-    id: 'addon-3',
-    nome: 'Relatórios Avançados',
-    slug: 'advanced-reports',
-    descricao: 'Filtros por período, gráficos comparativos, histórico completo e exportação detalhada.',
-    valor: 14.90,
-    icon: 'bar-chart',
-    ativo: true,
-    assinantes: 72,
-    categoria: 'relatorios',
-  },
-  {
-    id: 'addon-4',
-    nome: 'Multi-profissional',
-    slug: 'multi-user',
-    descricao: 'Adicione mais profissionais à sua conta com gestão de permissões individualizada.',
-    valor: 39.90,
-    icon: 'users',
-    ativo: true,
-    assinantes: 28,
-    categoria: 'gestao',
-  },
-  {
-    id: 'addon-5',
-    nome: 'White Label',
-    slug: 'white-label',
-    descricao: 'Personalize o sistema com sua marca, cores e logo próprio.',
-    valor: 99.90,
-    icon: 'palette',
-    ativo: true,
-    assinantes: 12,
-    categoria: 'personalizacao',
-  },
-  {
-    id: 'addon-6',
-    nome: 'Backup Avançado',
-    slug: 'advanced-backup',
-    descricao: 'Backup diário automático com histórico de 90 dias e recuperação instantânea.',
-    valor: 24.90,
-    icon: 'shield',
-    ativo: true,
-    assinantes: 45,
-    categoria: 'armazenamento',
-  },
-];
-
 export function AddonManagement() {
-  const [addons, setAddons] = useState<Addon[]>(initialAddons);
+  const { addons, fetchAddons, updateAddon } = useAdminStore();
   const [editingAddon, setEditingAddon] = useState<Addon | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    fetchAddons();
+  }, [fetchAddons]);
 
   const totalAssinantes = useMemo(() => 
     addons.reduce((acc, addon) => acc + addon.assinantes, 0),
@@ -163,12 +87,10 @@ export function AddonManagement() {
     setDialogOpen(true);
   };
 
-  const handleSaveAddon = () => {
+  const handleSaveAddon = async () => {
     if (!editingAddon) return;
     
-    setAddons(prev => 
-      prev.map(a => a.id === editingAddon.id ? editingAddon : a)
-    );
+    await updateAddon(editingAddon);
     
     toast({
       title: 'Add-on atualizado',
@@ -179,10 +101,11 @@ export function AddonManagement() {
     setEditingAddon(null);
   };
 
-  const handleToggleAddon = (addonId: string) => {
-    setAddons(prev => 
-      prev.map(a => a.id === addonId ? { ...a, ativo: !a.ativo } : a)
-    );
+  const handleToggleAddon = async (addonId: string) => {
+    const addon = addons.find(a => a.id === addonId);
+    if (!addon) return;
+    
+    await updateAddon({ ...addon, ativo: !addon.ativo });
   };
 
   return (

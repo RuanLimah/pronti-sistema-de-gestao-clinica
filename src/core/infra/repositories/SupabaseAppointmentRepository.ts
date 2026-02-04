@@ -18,7 +18,10 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .select()
       .single();
 
-    if (error) throw new Error(`Error creating appointment: ${error.message}`);
+    if (error) {
+      console.error('Supabase Error (Create Appointment):', error);
+      throw new Error(`Error creating appointment: ${error.message}`);
+    }
     return this.mapToEntity(appointment);
   }
 
@@ -29,7 +32,17 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .eq('client_id', userId);
 
     if (error) throw new Error(`Error listing appointments: ${error.message}`);
-    return appointments.map(this.mapToEntity);
+    return appointments.map((a) => this.mapToEntity(a));
+  }
+
+  async listByPatient(patientId: string): Promise<Appointment[]> {
+    const { data: appointments, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('patient_id', patientId);
+
+    if (error) throw new Error(`Error listing appointments by patient: ${error.message}`);
+    return appointments.map((a) => this.mapToEntity(a));
   }
 
   async listByDate(userId: string, date: string): Promise<Appointment[]> {
@@ -40,7 +53,7 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       .eq('date', date);
 
     if (error) throw new Error(`Error listing appointments by date: ${error.message}`);
-    return appointments.map(this.mapToEntity);
+    return appointments.map((a) => this.mapToEntity(a));
   }
 
   async approve(id: string): Promise<void> {
@@ -112,7 +125,7 @@ export class SupabaseAppointmentRepository implements AppointmentRepository {
       patient_id: data.patient_id,
       date: data.date,
       time: data.time,
-      status: this.mapStatus(data.status),
+      status: this.mapStatus(data.status ?? 'pending'),
       notes: data.notes,
       created_at: data.created_at,
       updated_at: data.updated_at,

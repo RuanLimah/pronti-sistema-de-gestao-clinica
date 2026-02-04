@@ -24,6 +24,18 @@ const paymentRepo = new SupabasePaymentRepository();
 const examRepo = new SupabaseExamRepository();
 const notificationRepo = new SupabaseNotificationRepository();
 
+async function fetchWithRetry<T>(fetchFn: () => Promise<T>, retries: number = 3): Promise<T> {
+  try {
+    return await fetchFn();
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries)));
+      return fetchWithRetry(fetchFn, retries - 1);
+    }
+    throw error;
+  }
+}
+
 const mapToStorePatient = (p: DomainPatient): Paciente => ({
   id: p.id,
   medicoId: p.user_id,
@@ -253,7 +265,9 @@ interface DataStore {
 
   // === CRUD Pacientes ===
   fetchPacientes: (medicoId: string, isAdmin?: boolean) => Promise<void>;
+  fetchPacienteById: (id: string) => Promise<Paciente | null>;
   fetchAtendimentos: (medicoId: string) => Promise<void>;
+  fetchAtendimentosByPaciente: (pacienteId: string) => Promise<void>;
   fetchPagamentos: (medicoId: string) => Promise<void>;
   fetchProntuarios: (pacienteId: string) => Promise<void>;
   fetchExames: (pacienteId: string) => Promise<void>;
@@ -328,7 +342,6 @@ interface DataStore {
   // === Utilitários ===
   gerarId: () => string;
   limparDados: () => void;
-  inicializarDadosMock: (medicoId: string) => void;
   
   // === Estatísticas ===
   getEstatisticasDashboard: (medicoId: string) => {
@@ -369,12 +382,12 @@ export const useDataStore = create<DataStore>()(
       gerarId: () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
 
       // ==================== CRUD USUÁRIOS ====================
-      getUsuarios: () => get().usuarios,
+      getUsuarios: () => get().usuarios || [],
       
-      getUsuarioById: (id) => get().usuarios.find((u) => u.id === id),
+      getUsuarioById: (id) => (get().usuarios || []).find((u) => u.id === id),
       
       getUsuarioByEmail: (email) => 
-        get().usuarios.find((u) => u.email.toLowerCase() === email.toLowerCase()),
+        (get().usuarios || []).find((u) => u.email.toLowerCase() === email.toLowerCase()),
 
       addUsuario: (usuarioData) => {
         const usuario: Usuario = {
@@ -402,7 +415,7 @@ export const useDataStore = create<DataStore>()(
 
       // ==================== CRUD CONFIGURAÇÕES ====================
       getConfiguracoesByMedico: (medicoId) => 
-        get().configuracoes.find((c) => c.medicoId === medicoId),
+        (get().configuracoes || []).find((c) => c.medicoId === medicoId),
 
       initConfiguracoes: (medicoId) => {
         const existing = get().getConfiguracoesByMedico(medicoId);
@@ -441,75 +454,120 @@ export const useDataStore = create<DataStore>()(
       // ==================== CRUD PACIENTES ====================
       fetchPacientes: async (medicoId, isAdmin) => {
         try {
-          const domainPatients = isAdmin 
-            ? await patientRepo.listAll() 
-            : await patientRepo.listByUser(medicoId);
+          const domainPatients = await fetchWithRetry(() => isAdmin 
+            ? patientRepo.listAll() 
+            : patientRepo.listByUser(medicoId));
           const storePatients = domainPatients.map(mapToStorePatient);
           set({ pacientes: storePatients });
         } catch (error) {
           console.error("Error fetching patients:", error);
+          throw error;
+        }
+      },
+
+      fetchPacienteById: async (id) => {
+        try {
+          const domainPatient = await fetchWithRetry(() => patientRepo.findById(id));
+          if (domainPatient) {
+            const storePatient = mapToStorePatient(domainPatient);
+            set((state) => {
+              const currentPatients = state.pacientes || [];
+              const otherPatients = currentPatients.filter(p => p.id !== id);
+              return { pacientes: [...otherPatients, storePatient] };
+            });
+            return storePatient;
+          }
+          return null;
+        } catch (error) {
+          console.error("Error fetching patient by id:", error);
+          throw error;
         }
       },
 
       fetchAtendimentos: async (medicoId) => {
         try {
-          const domainAppointments = await appointmentRepo.listByUser(medicoId);
+          const domainAppointments = await fetchWithRetry(() => appointmentRepo.listByUser(medicoId));
           const storeAppointments = domainAppointments.map(mapToStoreAppointment);
           set({ atendimentos: storeAppointments });
         } catch (error) {
           console.error("Error fetching appointments:", error);
+          throw error;
+        }
+      },
+
+      fetchAtendimentosByPaciente: async (pacienteId) => {
+        if (!pacienteId) return;
+        try {
+          const domainAppointments = await fetchWithRetry(() => appointmentRepo.listByPatient(pacienteId));
+          const storeAppointments = domainAppointments.map(mapToStoreAppointment);
+          set((state) => {
+             // Keep appointments that are NOT from this patient, add/replace ones from this patient
+             const currentAppointments = state.atendimentos || [];
+             const otherAppointments = currentAppointments.filter(a => a.pacienteId !== pacienteId);
+             return { atendimentos: [...otherAppointments, ...storeAppointments] };
+          });
+        } catch (error) {
+          console.error("Error fetching appointments by patient:", error);
+          throw error;
         }
       },
 
       fetchPagamentos: async (medicoId) => {
         try {
-          const domainPayments = await paymentRepo.listByUser(medicoId);
+          const domainPayments = await fetchWithRetry(() => paymentRepo.listByUser(medicoId));
           const storePayments = domainPayments.map(mapToStorePayment);
           set({ pagamentos: storePayments });
         } catch (error) {
           console.error("Error fetching payments:", error);
+          throw error;
         }
       },
 
       fetchProntuarios: async (pacienteId) => {
+        if (!pacienteId) return;
         try {
-          const domainRecords = await medicalRecordRepo.listByPatient(pacienteId);
+          const domainRecords = await fetchWithRetry(() => medicalRecordRepo.listByPatient(pacienteId));
           const storeRecords = domainRecords.map(mapToStoreMedicalRecord);
           // Update only records for this patient, keeping others? 
           // Or just replace? The store is global. 
           // If I navigate between patients, I might want to cache or clear.
           // For simplicity, let's merge/replace.
           set((state) => {
-            const otherRecords = state.prontuarios.filter(p => p.pacienteId !== pacienteId);
+            const currentRecords = state.prontuarios || [];
+            const otherRecords = currentRecords.filter(p => p.pacienteId !== pacienteId);
             return { prontuarios: [...otherRecords, ...storeRecords] };
           });
         } catch (error) {
           console.error("Error fetching medical records:", error);
+          throw error;
         }
       },
 
       fetchExames: async (pacienteId) => {
+        if (!pacienteId) return;
         try {
-          const domainExams = await examRepo.listByPatient(pacienteId);
+          const domainExams = await fetchWithRetry(() => examRepo.listByPatient(pacienteId));
           const storeExams = domainExams.map(mapToStoreExam);
           set((state) => {
-            const otherExams = state.exames.filter(e => e.pacienteId !== pacienteId);
+            const currentExams = state.exames || [];
+            const otherExams = currentExams.filter(e => e.pacienteId !== pacienteId);
             return { exames: [...otherExams, ...storeExams] };
           });
         } catch (error) {
           console.error("Error fetching exams:", error);
+          throw error;
         }
       },
 
-      getPacientes: () => get().pacientes,
+      getPacientes: () => get().pacientes || [],
       
-      getPacienteById: (id) => get().pacientes.find((p) => p.id === id),
+      getPacienteById: (id) => (get().pacientes || []).find((p) => p.id === id),
       
       getPacientesByMedico: (medicoId) =>
-        get().pacientes.filter((p) => p.medicoId === medicoId),
+        (get().pacientes || []).filter((p) => p.medicoId === medicoId),
       
       getPacientesAtivos: (medicoId) =>
-        get().pacientes.filter((p) => p.medicoId === medicoId && p.status === 'ativo'),
+        (get().pacientes || []).filter((p) => p.medicoId === medicoId && p.status === 'ativo'),
 
       addPaciente: async (pacienteData) => {
         // Aplicar valor padrão da consulta das configurações se não definido
@@ -628,15 +686,15 @@ export const useDataStore = create<DataStore>()(
       },
 
       // ==================== CRUD ATENDIMENTOS ====================
-      getAtendimentos: () => get().atendimentos,
+      getAtendimentos: () => get().atendimentos || [],
       
-      getAtendimentoById: (id) => get().atendimentos.find((a) => a.id === id),
+      getAtendimentoById: (id) => (get().atendimentos || []).find((a) => a.id === id),
       
       getAtendimentosByMedico: (medicoId) =>
-        get().atendimentos.filter((a) => a.medicoId === medicoId),
+        (get().atendimentos || []).filter((a) => a.medicoId === medicoId),
       
       getAtendimentosByPaciente: (pacienteId) =>
-        get().atendimentos.filter((a) => a.pacienteId === pacienteId),
+        (get().atendimentos || []).filter((a) => a.pacienteId === pacienteId),
 
       getAtendimentosHoje: (medicoId) => {
         const hoje = new Date();
@@ -889,23 +947,23 @@ export const useDataStore = create<DataStore>()(
       },
 
       // ==================== CRUD PAGAMENTOS ====================
-      getPagamentos: () => get().pagamentos,
+      getPagamentos: () => get().pagamentos || [],
       
-      getPagamentoById: (id) => get().pagamentos.find((p) => p.id === id),
+      getPagamentoById: (id) => (get().pagamentos || []).find((p) => p.id === id),
       
       getPagamentosByMedico: (medicoId) => {
         const pacienteIds = get().getPacientesByMedico(medicoId).map((p) => p.id);
-        return get().pagamentos.filter((p) => pacienteIds.includes(p.pacienteId));
+        return (get().pagamentos || []).filter((p) => pacienteIds.includes(p.pacienteId));
       },
       
       getPagamentosByPaciente: (pacienteId) =>
-        get().pagamentos.filter((p) => p.pacienteId === pacienteId),
+        (get().pagamentos || []).filter((p) => p.pacienteId === pacienteId),
       
       getPagamentosPendentes: (medicoId) =>
         get().getPagamentosByMedico(medicoId).filter((p) => p.status === 'pendente'),
 
       getPagamentoByAtendimento: (atendimentoId) =>
-        get().pagamentos.find((p) => p.atendimentoId === atendimentoId),
+        (get().pagamentos || []).find((p) => p.atendimentoId === atendimentoId),
 
       addPagamento: async (pagamentoData) => {
         try {
@@ -1035,12 +1093,12 @@ export const useDataStore = create<DataStore>()(
       },
 
       // ==================== CRUD PRONTUÁRIOS ====================
-      getProntuarios: () => get().prontuarios,
+      getProntuarios: () => get().prontuarios || [],
       
-      getProntuarioById: (id) => get().prontuarios.find((pr) => pr.id === id),
+      getProntuarioById: (id) => (get().prontuarios || []).find((pr) => pr.id === id),
       
       getProntuariosByPaciente: (pacienteId) =>
-        get().prontuarios.filter((pr) => pr.pacienteId === pacienteId),
+        (get().prontuarios || []).filter((pr) => pr.pacienteId === pacienteId),
 
       addProntuario: async (prontuarioData) => {
         try {
@@ -1058,6 +1116,7 @@ export const useDataStore = create<DataStore>()(
           
           const prontuario = mapToStoreMedicalRecord(domainRecord);
           set((state) => ({ prontuarios: [...state.prontuarios, prontuario] }));
+          
           return prontuario;
         } catch (error) {
            console.error("Error adding medical record:", error);
@@ -1068,7 +1127,7 @@ export const useDataStore = create<DataStore>()(
       updateProntuario: async (id, data) => {
         try {
           const updateData: any = {};
-          if (data.texto) updateData.content = data.texto;
+          if (data.texto !== undefined) updateData.content = data.texto;
           if (data.profissionalNome) updateData.professional_name = data.profissionalNome;
           
           if (Object.keys(updateData).length > 0) {
@@ -1086,6 +1145,7 @@ export const useDataStore = create<DataStore>()(
       },
 
       deleteProntuario: async (id) => {
+        const record = get().getProntuarioById(id);
         try {
           await medicalRecordRepo.delete(id);
           set((state) => ({
@@ -1097,12 +1157,12 @@ export const useDataStore = create<DataStore>()(
       },
 
       // ==================== CRUD EXAMES ====================
-      getExames: () => get().exames,
+      getExames: () => get().exames || [],
       
-      getExameById: (id) => get().exames.find((e) => e.id === id),
+      getExameById: (id) => (get().exames || []).find((e) => e.id === id),
       
       getExamesByPaciente: (pacienteId) =>
-        get().exames.filter((e) => e.pacienteId === pacienteId),
+        (get().exames || []).filter((e) => e.pacienteId === pacienteId),
 
       addExame: async (exameData) => {
         try {
@@ -1131,6 +1191,7 @@ export const useDataStore = create<DataStore>()(
            
            const exame = mapToStoreExam(domainExam);
            set((state) => ({ exames: [...state.exames, exame] }));
+           
            return exame;
         } catch (error) {
            console.error("Error adding exam:", error);
@@ -1156,10 +1217,10 @@ export const useDataStore = create<DataStore>()(
               const updatedExam = mapToStoreExam(domainExam);
               
               set((state) => ({
-                exames: state.exames.map((e) =>
-                  e.id === id ? updatedExam : e
-                ),
-              }));
+              exames: state.exames.map((e) =>
+                e.id === id ? updatedExam : e
+              ),
+            }));
            }
         } catch (error) {
            console.error("Error updating exam:", error);
@@ -1167,6 +1228,7 @@ export const useDataStore = create<DataStore>()(
       },
 
       deleteExame: async (id) => {
+        const exame = get().getExameById(id);
         try {
           await examRepo.delete(id);
           set((state) => ({
@@ -1188,15 +1250,15 @@ export const useDataStore = create<DataStore>()(
         }
       },
 
-      getNotificacoes: () => get().notificacoes,
+      getNotificacoes: () => get().notificacoes || [],
       
-      getNotificacaoById: (id) => get().notificacoes.find((n) => n.id === id),
+      getNotificacaoById: (id) => (get().notificacoes || []).find((n) => n.id === id),
       
       getNotificacoesByMedico: (medicoId) =>
-        get().notificacoes.filter((n) => n.medicoId === medicoId),
+        (get().notificacoes || []).filter((n) => n.medicoId === medicoId),
       
       getNotificacoesNaoLidas: (medicoId) =>
-        get().notificacoes.filter((n) => n.medicoId === medicoId && !n.lida),
+        (get().notificacoes || []).filter((n) => n.medicoId === medicoId && !n.lida),
 
       addNotificacao: async (notificacaoData) => {
         try {
@@ -1349,245 +1411,16 @@ export const useDataStore = create<DataStore>()(
         };
       },
 
-      // ==================== DADOS MOCK ====================
-      inicializarDadosMock: (medicoId) => {
-        const { pacientes } = get();
-        
-        // Não inicializar se já existem dados para este médico
-        if (pacientes.filter((p) => p.medicoId === medicoId).length > 0) {
-          return;
-        }
 
-        // Inicializar configurações
-        get().initConfiguracoes(medicoId);
-
-        const hoje = new Date();
-        
-        // Pacientes mock
-        const pacientesMock: Paciente[] = [
-          {
-            id: 'pac-1',
-            medicoId,
-            nome: 'Maria Santos',
-            telefone: '11999887766',
-            email: 'maria.santos@email.com',
-            status: 'ativo',
-            valorConsulta: 200,
-            queixaPrincipal: 'Ansiedade generalizada',
-            alergias: 'Nenhuma conhecida',
-            criadoEm: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-          {
-            id: 'pac-2',
-            medicoId,
-            nome: 'João Oliveira',
-            telefone: '11988776655',
-            email: 'joao.oliveira@email.com',
-            status: 'ativo',
-            valorConsulta: 180,
-            queixaPrincipal: 'Dificuldade em lidar com luto',
-            criadoEm: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-          },
-          {
-            id: 'pac-3',
-            medicoId,
-            nome: 'Ana Costa',
-            telefone: '11977665544',
-            email: 'ana.costa@email.com',
-            status: 'ativo',
-            valorConsulta: 200,
-            criadoEm: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
-          },
-          {
-            id: 'pac-4',
-            medicoId,
-            nome: 'Pedro Lima',
-            telefone: '11966554433',
-            email: 'pedro.lima@email.com',
-            status: 'inativo',
-            valorConsulta: 150,
-            criadoEm: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
-          },
-          {
-            id: 'pac-5',
-            medicoId,
-            nome: 'Carla Mendes',
-            telefone: '11955443322',
-            email: 'carla.mendes@email.com',
-            status: 'ativo',
-            valorConsulta: 220,
-            criadoEm: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          },
-        ];
-
-        // Atendimentos mock
-        const atendimentosMock: Atendimento[] = [
-          {
-            id: 'atend-1',
-            pacienteId: 'pac-1',
-            medicoId,
-            data: hoje,
-            hora: '09:00',
-            status: 'realizado',
-            valor: 200,
-            criadoEm: new Date(),
-          },
-          {
-            id: 'atend-2',
-            pacienteId: 'pac-2',
-            medicoId,
-            data: hoje,
-            hora: '10:00',
-            status: 'agendado',
-            valor: 180,
-            criadoEm: new Date(),
-          },
-          {
-            id: 'atend-3',
-            pacienteId: 'pac-3',
-            medicoId,
-            data: hoje,
-            hora: '11:00',
-            status: 'agendado',
-            valor: 200,
-            criadoEm: new Date(),
-          },
-          {
-            id: 'atend-4',
-            pacienteId: 'pac-1',
-            medicoId,
-            data: hoje,
-            hora: '14:00',
-            status: 'agendado',
-            valor: 200,
-            criadoEm: new Date(),
-          },
-          {
-            id: 'atend-5',
-            pacienteId: 'pac-5',
-            medicoId,
-            data: hoje,
-            hora: '15:00',
-            status: 'agendado',
-            valor: 220,
-            criadoEm: new Date(),
-          },
-        ];
-
-        // Pagamentos mock
-        const pagamentosMock: Pagamento[] = [
-          {
-            id: 'pag-1',
-            pacienteId: 'pac-1',
-            atendimentoId: 'atend-1',
-            valor: 200,
-            formaPagamento: 'pix',
-            status: 'pago',
-            data: hoje,
-            dataPagamento: hoje,
-            criadoEm: new Date(),
-          },
-          {
-            id: 'pag-2',
-            pacienteId: 'pac-2',
-            atendimentoId: 'atend-2',
-            valor: 180,
-            formaPagamento: 'cartao',
-            status: 'pendente',
-            data: hoje,
-            criadoEm: new Date(),
-          },
-          {
-            id: 'pag-3',
-            pacienteId: 'pac-3',
-            atendimentoId: 'atend-3',
-            valor: 200,
-            formaPagamento: 'dinheiro',
-            status: 'pendente',
-            data: hoje,
-            criadoEm: new Date(),
-          },
-          {
-            id: 'pag-4',
-            pacienteId: 'pac-5',
-            valor: 220,
-            formaPagamento: 'transferencia',
-            status: 'pendente',
-            data: hoje,
-            criadoEm: new Date(),
-          },
-        ];
-
-        // Prontuários mock
-        const prontuariosMock: Prontuario[] = [
-          {
-            id: 'pront-1',
-            pacienteId: 'pac-1',
-            medicoId,
-            profissionalNome: 'Dra. Ana Silva',
-            texto: 'Primeira sessão: Paciente relata ansiedade em situações sociais. Iniciamos trabalho de identificação de gatilhos.',
-            criadoEm: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-          {
-            id: 'pront-2',
-            pacienteId: 'pac-1',
-            medicoId,
-            profissionalNome: 'Dra. Ana Silva',
-            texto: 'Segunda sessão: Evolução positiva. Paciente conseguiu identificar 3 gatilhos principais.',
-            criadoEm: new Date(Date.now() - 23 * 24 * 60 * 60 * 1000),
-          },
-          {
-            id: 'pront-3',
-            pacienteId: 'pac-2',
-            medicoId,
-            profissionalNome: 'Dra. Ana Silva',
-            texto: 'Sessão inicial: Paciente busca ajuda para lidar com luto recente. Apresenta sintomas depressivos leves.',
-            criadoEm: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-          },
-        ];
-
-        // Notificações mock
-        const notificacoesMock: Notificacao[] = [
-          {
-            id: 'notif-1',
-            medicoId,
-            tipo: 'agendamento',
-            titulo: 'Novo agendamento',
-            mensagem: 'Maria Santos agendou para hoje às 14:00',
-            lida: false,
-            link: '/agenda',
-            data: new Date(Date.now() - 2 * 60 * 60 * 1000),
-          },
-          {
-            id: 'notif-2',
-            medicoId,
-            tipo: 'pagamento',
-            titulo: 'Pagamento confirmado',
-            mensagem: 'Pagamento de R$ 200,00 de Maria Santos confirmado',
-            lida: true,
-            link: '/financeiro',
-            data: new Date(Date.now() - 5 * 60 * 60 * 1000),
-          },
-        ];
-
-        set((state) => ({
-          pacientes: [...state.pacientes, ...pacientesMock],
-          atendimentos: [...state.atendimentos, ...atendimentosMock],
-          pagamentos: [...state.pagamentos, ...pagamentosMock],
-          prontuarios: [...state.prontuarios, ...prontuariosMock],
-          notificacoes: [...state.notificacoes, ...notificacoesMock],
-        }));
-      },
     }),
     {
       name: 'pronti-data',
       partialize: (state) => ({
+        // Apenas dados globais e menos voláteis devem ser persistidos
+        // Dados sensíveis e dinâmicos (prontuários, exames) NÃO DEVEM ser persistidos
+        // pois causam problemas de serialização de Date e riscos LGPD
         usuarios: state.usuarios,
-        pacientes: state.pacientes,
-        atendimentos: state.atendimentos,
-        pagamentos: state.pagamentos,
-        prontuarios: state.prontuarios,
-        notificacoes: state.notificacoes,
+        pacientes: state.pacientes, // Mantemos pacientes para listagens rápidas, mas o detalhe sempre busca do banco
         configuracoes: state.configuracoes,
       }),
     }

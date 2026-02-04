@@ -33,7 +33,8 @@ import {
   Calendar,
   Clock
 } from "lucide-react";
-import { Doctor, DoctorStatus, useAdminStore } from "@/stores/adminStore";
+import { useAdminStore } from "@/stores/adminStore";
+import { Doctor, DoctorStatus } from "@/types/admin";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 

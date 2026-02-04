@@ -1,6 +1,4 @@
-// ============= PRONTI - Gerenciamento de Clientes (Admin) =============
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -12,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -24,8 +21,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -44,7 +39,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   MoreVertical,
   Eye,
@@ -56,20 +50,22 @@ import {
   Ban,
   Users,
   Search,
-  Plus,
   Calendar,
   DollarSign,
-  HardDrive,
+  Settings,
   Activity,
+  Sliders,
+  Plus
 } from "lucide-react";
-import { useClientStore, Client, ClientStatus, AdminActionHistory } from "@/stores/clientStore";
-import { usePatientStore } from "@/stores/patientStore";
-import { PLANOS, PlanTier, ADDONS } from "@/types/plans";
+import { useAdminStore } from "@/stores/adminStore";
+import { Doctor, DoctorStatus } from "@/types/admin";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { DoctorModulesDialog } from "./DoctorModulesDialog";
+import { DoctorLimitsDialog } from "./DoctorLimitsDialog";
 
-const statusConfig: Record<ClientStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   ativo: { label: "Ativo", variant: "default" },
   inativo: { label: "Inativo", variant: "secondary" },
   suspenso: { label: "Suspenso", variant: "destructive" },
@@ -80,47 +76,53 @@ const statusConfig: Record<ClientStatus, { label: string; variant: "default" | "
 export function ClientManagement() {
   const { toast } = useToast();
   const {
-    getAllClients,
-    getClient,
-    getClientHistory,
-    setClientStatus,
-    changeClientPlan,
-    toggleClientAddon,
-    grantClientTrial,
-  } = useClientStore();
+    doctors,
+    plans,
+    addons: availableAddons,
+    fetchDoctors,
+    fetchPlans,
+    fetchAddons,
+    updateDoctorStatus,
+    updateDoctorPlan,
+    toggleDoctorAddon,
+    isLoading
+  } = useAdminStore();
   
-  const { getPatientCountByClient, getActivePatientCountByClient } = usePatientStore();
+  // Load data on mount
+  useEffect(() => {
+    fetchDoctors();
+    fetchPlans();
+    fetchAddons();
+  }, [fetchDoctors, fetchPlans, fetchAddons]);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [planFilter, setPlanFilter] = useState<string>("todos");
   
   // Dialogs
-  const [viewDialog, setViewDialog] = useState<Client | null>(null);
-  const [historyDialog, setHistoryDialog] = useState<Client | null>(null);
-  const [planDialog, setPlanDialog] = useState<Client | null>(null);
-  const [addonDialog, setAddonDialog] = useState<Client | null>(null);
-  const [statusDialog, setStatusDialog] = useState<{ client: Client; action: 'suspender' | 'bloquear' | 'reativar' } | null>(null);
-  const [trialDialog, setTrialDialog] = useState<Client | null>(null);
+  const [viewDialog, setViewDialog] = useState<Doctor | null>(null);
+  const [planDialog, setPlanDialog] = useState<Doctor | null>(null);
+  const [addonDialog, setAddonDialog] = useState<Doctor | null>(null);
+  const [modulesDialog, setModulesDialog] = useState<Doctor | null>(null);
+  const [limitsDialog, setLimitsDialog] = useState<Doctor | null>(null);
+  const [statusDialog, setStatusDialog] = useState<{ client: Doctor; action: 'suspender' | 'bloquear' | 'reativar' } | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   
   // Form states
-  const [selectedPlan, setSelectedPlan] = useState<PlanTier>("essencial");
+  const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [justificativa, setJustificativa] = useState("");
-  const [trialDays, setTrialDays] = useState("7");
-  
-  const clients = getAllClients();
   
   // Filtros
-  const filteredClients = clients.filter(client => {
+  const filteredClients = doctors.filter(client => {
     const matchesSearch = client.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          client.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "todos" || client.status === statusFilter;
-    const matchesPlan = planFilter === "todos" || client.planoAtual === planFilter;
+    const matchesPlan = planFilter === "todos" || client.plano === planFilter;
     
     return matchesSearch && matchesStatus && matchesPlan;
   });
   
-  const handleStatusChange = () => {
+  const handleStatusChange = async () => {
     if (!statusDialog || !justificativa.trim()) {
       toast({
         title: "Erro",
@@ -130,10 +132,10 @@ export function ClientManagement() {
       return;
     }
     
-    const newStatus: ClientStatus = statusDialog.action === 'reativar' ? 'ativo' :
+    const newStatus: DoctorStatus = statusDialog.action === 'reativar' ? 'ativo' :
                                     statusDialog.action === 'suspender' ? 'suspenso' : 'bloqueado';
     
-    setClientStatus(statusDialog.client.id, newStatus, "admin-1", "Administrador", justificativa);
+    await updateDoctorStatus(statusDialog.client.id, newStatus, justificativa);
     
     toast({
       title: "Status atualizado",
@@ -144,51 +146,44 @@ export function ClientManagement() {
     setJustificativa("");
   };
   
-  const handlePlanChange = () => {
-    if (!planDialog) return;
+  const handlePlanChange = async () => {
+    if (!planDialog || !selectedPlan) return;
     
-    changeClientPlan(planDialog.id, selectedPlan, "admin-1", "Administrador");
+    await updateDoctorPlan(planDialog.id, selectedPlan);
     
+    const planName = plans.find(p => p.id === selectedPlan || p.tier === selectedPlan)?.nome || selectedPlan;
+
     toast({
       title: "Plano alterado",
-      description: `Plano do cliente alterado para ${PLANOS[selectedPlan].nome}.`,
+      description: `Plano do cliente alterado para ${planName}.`,
     });
     
     setPlanDialog(null);
   };
   
-  const handleToggleAddon = (clienteId: string, addonType: keyof typeof ADDONS, ativar: boolean) => {
-    toggleClientAddon(clienteId, addonType, ativar, "admin-1", "Administrador");
+  const handleToggleAddon = async (clienteId: string, addonSlug: string, ativar: boolean) => {
+    await toggleDoctorAddon(clienteId, addonSlug, ativar);
     
+    const addonName = availableAddons.find(a => a.slug === addonSlug)?.nome || addonSlug;
+
     toast({
       title: ativar ? "Add-on ativado" : "Add-on desativado",
-      description: `${ADDONS[addonType].nome} ${ativar ? 'ativado' : 'desativado'} com sucesso.`,
+      description: `${addonName} ${ativar ? 'ativado' : 'desativado'} com sucesso.`,
     });
   };
-  
-  const handleGrantTrial = () => {
-    if (!trialDialog) return;
-    
-    const days = parseInt(trialDays);
-    if (isNaN(days) || days < 1 || days > 90) {
-      toast({
-        title: "Erro",
-        description: "Dias de trial inválido (1-90)",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    grantClientTrial(trialDialog.id, days, "admin-1", "Administrador");
-    
-    toast({
-      title: "Trial concedido",
-      description: `Trial de ${days} dias concedido para ${trialDialog.nome}.`,
-    });
-    
-    setTrialDialog(null);
-    setTrialDays("7");
+
+  // Helper to get plan details
+  const getPlanDetails = (planIdentifier: string) => {
+    return plans.find(p => p.tier === planIdentifier || p.id === planIdentifier) || { nome: planIdentifier, valor: 0 };
   };
+
+  // Calculate stats
+  const totalRevenue = doctors.reduce((sum, client) => {
+    if (client.status !== 'ativo') return sum;
+    const plan = getPlanDetails(client.plano);
+    // Add addon prices if needed, for now just plan
+    return sum + (plan.valor || 0);
+  }, 0);
   
   return (
     <div className="space-y-6">
@@ -200,7 +195,7 @@ export function ClientManagement() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{clients.length}</div>
+            <div className="text-2xl font-bold">{doctors.length}</div>
           </CardContent>
         </Card>
         
@@ -211,31 +206,31 @@ export function ClientManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {clients.filter(c => c.status === 'ativo').length}
+              {doctors.filter(c => c.status === 'ativo').length}
             </div>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Em Trial</CardTitle>
-            <Calendar className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">Bloqueados/Suspensos</CardTitle>
+            <Ban className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {clients.filter(c => c.status === 'trial').length}
+            <div className="text-2xl font-bold text-red-600">
+              {doctors.filter(c => c.status === 'bloqueado' || c.status === 'suspenso').length}
             </div>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Receita Mensal</CardTitle>
+            <CardTitle className="text-sm font-medium">Receita Estimada</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              R$ {clients.filter(c => c.status === 'ativo').reduce((sum, c) => sum + c.valorMensal, 0).toFixed(2)}
+              R$ {totalRevenue.toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -266,7 +261,6 @@ export function ClientManagement() {
               <SelectContent>
                 <SelectItem value="todos">Todos status</SelectItem>
                 <SelectItem value="ativo">Ativo</SelectItem>
-                <SelectItem value="trial">Trial</SelectItem>
                 <SelectItem value="suspenso">Suspenso</SelectItem>
                 <SelectItem value="bloqueado">Bloqueado</SelectItem>
               </SelectContent>
@@ -278,9 +272,12 @@ export function ClientManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos planos</SelectItem>
-                <SelectItem value="gratuito">Gratuito</SelectItem>
-                <SelectItem value="essencial">Essencial</SelectItem>
+                {plans.map(plan => (
+                   <SelectItem key={plan.id} value={plan.tier}>{plan.nome}</SelectItem>
+                ))}
+                <SelectItem value="basico">Básico</SelectItem>
                 <SelectItem value="profissional">Profissional</SelectItem>
+                <SelectItem value="premium">Premium</SelectItem>
                 <SelectItem value="clinica">Clínica</SelectItem>
               </SelectContent>
             </Select>
@@ -293,111 +290,127 @@ export function ClientManagement() {
                 <TableHead>Cliente</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Pacientes</TableHead>
-                <TableHead>Valor Mensal</TableHead>
+                <TableHead>Módulos Ativos</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClients.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{client.nome}</p>
-                      <p className="text-sm text-muted-foreground">{client.email}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="gap-1">
-                      <Crown className="h-3 w-3" />
-                      {PLANOS[client.planoAtual].nome}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusConfig[client.status].variant}>
-                      {statusConfig[client.status].label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <span className="font-medium">{getActivePatientCountByClient(client.id)}</span>
-                      <span className="text-muted-foreground"> / {getPatientCountByClient(client.id)}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium">R$ {client.valorMensal.toFixed(2)}</span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        
-                        <DropdownMenuItem onClick={() => setViewDialog(client)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          Ver mais
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem onClick={() => setHistoryDialog(client)}>
-                          <History className="mr-2 h-4 w-4" />
-                          Histórico
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuSeparator />
-                        
-                        <DropdownMenuItem onClick={() => setPlanDialog(client)}>
-                          <Crown className="mr-2 h-4 w-4" />
-                          Gerenciar plano
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem onClick={() => setAddonDialog(client)}>
-                          <Zap className="mr-2 h-4 w-4" />
-                          Gerenciar add-ons
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuItem onClick={() => setTrialDialog(client)}>
-                          <Calendar className="mr-2 h-4 w-4" />
-                          Conceder trial
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuSeparator />
-                        
-                        {client.status === 'ativo' || client.status === 'trial' ? (
-                          <>
-                            <DropdownMenuItem
-                              onClick={() => setStatusDialog({ client, action: 'suspender' })}
-                              className="text-amber-600"
-                            >
-                              <UserX className="mr-2 h-4 w-4" />
-                              Suspender
+              {isLoading ? (
+                 <TableRow>
+                   <TableCell colSpan={5} className="text-center py-4">Carregando...</TableCell>
+                 </TableRow>
+              ) : filteredClients.length === 0 ? (
+                 <TableRow>
+                   <TableCell colSpan={5} className="text-center py-4">Nenhum cliente encontrado.</TableCell>
+                 </TableRow>
+              ) : (
+                filteredClients.map((client) => {
+                  const planDetails = getPlanDetails(client.plano);
+                  return (
+                    <TableRow key={client.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{client.nome}</p>
+                          <p className="text-sm text-muted-foreground">{client.email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="gap-1">
+                          <Crown className="h-3 w-3" />
+                          {planDetails.nome}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={statusConfig[client.status]?.variant || 'default'}>
+                          {statusConfig[client.status]?.label || client.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 flex-wrap">
+                           {Object.entries(client.modules).filter(([_, active]) => active).slice(0, 3).map(([key]) => (
+                             <Badge key={key} variant="secondary" className="text-xs">{key}</Badge>
+                           ))}
+                           {Object.values(client.modules).filter(Boolean).length > 3 && (
+                             <Badge variant="secondary" className="text-xs">+{Object.values(client.modules).filter(Boolean).length - 3}</Badge>
+                           )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            
+                            <DropdownMenuItem onClick={() => setViewDialog(client)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Ver mais
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setStatusDialog({ client, action: 'bloquear' })}
-                              className="text-destructive"
-                            >
-                              <Ban className="mr-2 h-4 w-4" />
-                              Bloquear
+                            
+                            <DropdownMenuSeparator />
+                            
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedPlan(client.plano);
+                              setPlanDialog(client);
+                            }}>
+                              <Crown className="mr-2 h-4 w-4" />
+                              Gerenciar plano
                             </DropdownMenuItem>
-                          </>
-                        ) : (
-                          <DropdownMenuItem
-                            onClick={() => setStatusDialog({ client, action: 'reativar' })}
-                            className="text-green-600"
-                          >
-                            <UserCheck className="mr-2 h-4 w-4" />
-                            Reativar
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+                            
+                            <DropdownMenuItem onClick={() => setModulesDialog(client)}>
+                              <Settings className="mr-2 h-4 w-4" />
+                              Gerenciar módulos
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem onClick={() => setLimitsDialog(client)}>
+                              <Sliders className="mr-2 h-4 w-4" />
+                              Gerenciar limites
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem onClick={() => setAddonDialog(client)}>
+                              <Zap className="mr-2 h-4 w-4" />
+                              Gerenciar add-ons
+                            </DropdownMenuItem>
+                            
+                            <DropdownMenuSeparator />
+                            
+                            {client.status === 'ativo' ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => setStatusDialog({ client, action: 'suspender' })}
+                                  className="text-amber-600"
+                                >
+                                  <UserX className="mr-2 h-4 w-4" />
+                                  Suspender
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setStatusDialog({ client, action: 'bloquear' })}
+                                  className="text-destructive"
+                                >
+                                  <Ban className="mr-2 h-4 w-4" />
+                                  Bloquear
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => setStatusDialog({ client, action: 'reativar' })}
+                                className="text-green-600"
+                              >
+                                <UserCheck className="mr-2 h-4 w-4" />
+                                Reativar
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -422,119 +435,55 @@ export function ClientManagement() {
                   <p className="font-medium">{viewDialog.email}</p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Telefone</Label>
-                  <p className="font-medium">{viewDialog.telefone}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Especialidade</Label>
-                  <p className="font-medium">{viewDialog.especialidade || '-'}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">CRP</Label>
-                  <p className="font-medium">{viewDialog.crp || '-'}</p>
-                </div>
-                <div>
                   <Label className="text-muted-foreground">Status</Label>
-                  <Badge variant={statusConfig[viewDialog.status].variant}>
-                    {statusConfig[viewDialog.status].label}
+                  <Badge variant={statusConfig[viewDialog.status]?.variant || 'default'}>
+                    {statusConfig[viewDialog.status]?.label || viewDialog.status}
                   </Badge>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Criado em</Label>
+                  <p className="font-medium">{format(new Date(viewDialog.criadoEm), "dd/MM/yyyy", { locale: ptBR })}</p>
                 </div>
               </div>
               
               <div className="border-t pt-4">
-                <h4 className="font-medium mb-3">Plano e Assinatura</h4>
+                <h4 className="font-medium mb-3">Plano e Módulos</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-muted-foreground">Plano Atual</Label>
-                    <p className="font-medium">{PLANOS[viewDialog.planoAtual].nome}</p>
+                    <p className="font-medium">{getPlanDetails(viewDialog.plano).nome}</p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground">Valor Mensal</Label>
-                    <p className="font-medium">R$ {viewDialog.valorMensal.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Início do Plano</Label>
-                    <p className="font-medium">{format(new Date(viewDialog.planoDataInicio), "dd/MM/yyyy", { locale: ptBR })}</p>
-                  </div>
-                  {viewDialog.trialFim && (
-                    <div>
-                      <Label className="text-muted-foreground">Fim do Trial</Label>
-                      <p className="font-medium">{format(new Date(viewDialog.trialFim), "dd/MM/yyyy", { locale: ptBR })}</p>
+                    <Label className="text-muted-foreground">Módulos Ativos</Label>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {Object.entries(viewDialog.modules).map(([key, active]) => (
+                        <Badge key={key} variant={active ? "default" : "outline"} className="text-xs">
+                          {key}: {active ? "Sim" : "Não"}
+                        </Badge>
+                      ))}
                     </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3">Add-ons Ativos</h4>
+                <div className="flex flex-wrap gap-2">
+                  {viewDialog.addons && viewDialog.addons.length > 0 ? (
+                    viewDialog.addons.map(slug => {
+                      const addon = availableAddons.find(a => a.slug === slug);
+                      return (
+                        <Badge key={slug} variant="secondary">
+                          {addon ? addon.nome : slug}
+                        </Badge>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum add-on ativo.</p>
                   )}
                 </div>
               </div>
-              
-              <div className="border-t pt-4">
-                <h4 className="font-medium mb-3">Add-ons</h4>
-                <div className="flex flex-wrap gap-2">
-                  {viewDialog.addons.map(addon => (
-                    <Badge
-                      key={addon.addonType}
-                      variant={addon.status === 'ativo' ? 'default' : addon.status === 'bloqueado_por_plano' ? 'destructive' : 'outline'}
-                    >
-                      {ADDONS[addon.addonType].nome}: {addon.status}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="border-t pt-4">
-                <h4 className="font-medium mb-3">Métricas</h4>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-muted rounded-lg">
-                    <p className="text-2xl font-bold">{viewDialog.totalPacientes}</p>
-                    <p className="text-xs text-muted-foreground">Total Pacientes</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted rounded-lg">
-                    <p className="text-2xl font-bold">{viewDialog.pacientesAtivos}</p>
-                    <p className="text-xs text-muted-foreground">Ativos</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted rounded-lg">
-                    <p className="text-2xl font-bold">{viewDialog.atendimentosMes}</p>
-                    <p className="text-xs text-muted-foreground">Atend./Mês</p>
-                  </div>
-                  <div className="text-center p-3 bg-muted rounded-lg">
-                    <p className="text-2xl font-bold">{(viewDialog.armazenamentoUsadoMB / 1024).toFixed(1)} GB</p>
-                    <p className="text-xs text-muted-foreground">Armazenamento</p>
-                  </div>
-                </div>
-              </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      
-      {/* Dialog: Histórico */}
-      <Dialog open={!!historyDialog} onOpenChange={() => setHistoryDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Histórico de Ações - {historyDialog?.nome}</DialogTitle>
-          </DialogHeader>
-          
-          {historyDialog && (
-            <ScrollArea className="h-[400px]">
-              <div className="space-y-3">
-                {getClientHistory(historyDialog.id).length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Nenhuma ação registrada
-                  </p>
-                ) : (
-                  getClientHistory(historyDialog.id).map((action: AdminActionHistory) => (
-                    <div key={action.id} className="flex gap-3 p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-medium">{action.descricao}</p>
-                        <div className="flex gap-2 mt-1 text-sm text-muted-foreground">
-                          <span>Por: {action.adminNome}</span>
-                          <span>•</span>
-                          <span>{format(new Date(action.criadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
           )}
         </DialogContent>
       </Dialog>
@@ -543,39 +492,32 @@ export function ClientManagement() {
       <Dialog open={!!planDialog} onOpenChange={() => setPlanDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Gerenciar Plano</DialogTitle>
-            <DialogDescription>
-              Altere o plano de {planDialog?.nome}
-            </DialogDescription>
+            <DialogTitle>Alterar Plano</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Plano atual</Label>
-              <Badge variant="outline">{planDialog && PLANOS[planDialog.planoAtual].nome}</Badge>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Novo plano</Label>
-              <Select value={selectedPlan} onValueChange={(v) => setSelectedPlan(v as PlanTier)}>
+              <Label>Selecione o novo plano</Label>
+              <Select value={selectedPlan} onValueChange={setSelectedPlan}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.values(PLANOS).map(plan => (
-                    <SelectItem key={plan.tier} value={plan.tier}>
-                      {plan.nome} - R$ {plan.valor.toFixed(2)}/mês
-                    </SelectItem>
+                  {plans.map(plan => (
+                     <SelectItem key={plan.id} value={plan.tier}>{plan.nome} (R$ {plan.valor})</SelectItem>
                   ))}
+                  <SelectItem value="basico">Básico</SelectItem>
+                  <SelectItem value="profissional">Profissional</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                  <SelectItem value="clinica">Clínica</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            
+            <Button onClick={handlePlanChange} className="w-full">
+              Confirmar Alteração
+            </Button>
           </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPlanDialog(null)}>Cancelar</Button>
-            <Button onClick={handlePlanChange}>Alterar Plano</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
       
@@ -584,119 +526,103 @@ export function ClientManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Gerenciar Add-ons</DialogTitle>
-            <DialogDescription>
-              Ative ou desative add-ons para {addonDialog?.nome}
-            </DialogDescription>
           </DialogHeader>
           
-          {addonDialog && (
-            <div className="space-y-4 py-4">
-              {addonDialog.addons.map(addon => {
-                const addonInfo = ADDONS[addon.addonType];
-                const isBlocked = addon.status === 'bloqueado_por_plano';
-                const isActive = addon.status === 'ativo';
-                
-                return (
-                  <div key={addon.addonType} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{addonInfo.nome}</p>
-                      <p className="text-sm text-muted-foreground">R$ {addonInfo.valor.toFixed(2)}/mês</p>
-                    </div>
-                    
-                    {isBlocked ? (
-                      <Badge variant="destructive">Bloqueado pelo plano</Badge>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Badge variant={isActive ? "default" : "outline"}>
-                          {isActive ? "Ativo" : "Inativo"}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant={isActive ? "destructive" : "default"}
-                          onClick={() => handleToggleAddon(addonDialog.id, addon.addonType, !isActive)}
-                        >
-                          {isActive ? "Desativar" : "Ativar"}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+          <div className="space-y-4 py-4">
+            {availableAddons.length === 0 ? (
+               <p className="text-center text-muted-foreground">Nenhum add-on disponível no sistema.</p>
+            ) : (
+               availableAddons.map(addon => {
+                 const isAtivo = addonDialog?.addons?.includes(addon.slug);
+                 return (
+                   <div key={addon.id} className="flex items-center justify-between p-3 border rounded-lg">
+                     <div>
+                       <p className="font-medium">{addon.nome}</p>
+                       <p className="text-sm text-muted-foreground">R$ {addon.valor}</p>
+                     </div>
+                     <Button 
+                       variant={isAtivo ? "destructive" : "default"}
+                       size="sm"
+                       onClick={() => addonDialog && handleToggleAddon(addonDialog.id, addon.slug, !isAtivo)}
+                     >
+                       {isAtivo ? "Desativar" : "Ativar"}
+                     </Button>
+                   </div>
+                 );
+               })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Gerenciar Módulos */}
+      <DoctorModulesDialog 
+        doctor={modulesDialog} 
+        open={!!modulesDialog} 
+        onOpenChange={(open) => !open && setModulesDialog(null)} 
+      />
+
+      {/* Dialog: Gerenciar Limites */}
+      <DoctorLimitsDialog 
+        doctor={limitsDialog} 
+        open={!!limitsDialog} 
+        onOpenChange={(open) => !open && setLimitsDialog(null)} 
+      />
+      
+      {/* Dialog: Novo Cliente Info */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Novo Cliente</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-3 p-4 bg-amber-50 text-amber-800 rounded-lg border border-amber-200">
+              <Activity className="h-5 w-5" />
+              <p className="text-sm">
+                A criação manual de clientes via painel administrativo requer integração com backend.
+              </p>
             </div>
-          )}
+            <p className="text-sm text-muted-foreground">
+              Para adicionar um novo cliente, peça para o usuário se cadastrar na página de registro ou use a API do Supabase diretamente.
+            </p>
+            <Button onClick={() => setCreateDialogOpen(false)} className="w-full">
+              Entendi
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       
-      {/* Dialog: Status (Suspender/Bloquear/Reativar) */}
-      <Dialog open={!!statusDialog} onOpenChange={() => { setStatusDialog(null); setJustificativa(""); }}>
+      {/* Dialog: Status */}
+      <Dialog open={!!statusDialog} onOpenChange={() => setStatusDialog(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {statusDialog?.action === 'reativar' ? 'Reativar' :
-               statusDialog?.action === 'suspender' ? 'Suspender' : 'Bloquear'} Cliente
+              {statusDialog?.action === 'suspender' ? 'Suspender Cliente' : 
+               statusDialog?.action === 'bloquear' ? 'Bloquear Cliente' : 'Reativar Cliente'}
             </DialogTitle>
-            <DialogDescription>
-              {statusDialog?.action === 'reativar'
-                ? `Reativar a conta de ${statusDialog?.client.nome}`
-                : `${statusDialog?.action === 'suspender' ? 'Suspender' : 'Bloquear'} a conta de ${statusDialog?.client.nome}`
-              }
-            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Justificativa (obrigatória)</Label>
-              <Textarea
-                placeholder="Descreva o motivo..."
-                value={justificativa}
+              <Label>Justificativa</Label>
+              <Input 
+                value={justificativa} 
                 onChange={(e) => setJustificativa(e.target.value)}
+                placeholder="Motivo da alteração de status..."
               />
             </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setStatusDialog(null); setJustificativa(""); }}>
-              Cancelar
-            </Button>
-            <Button
-              variant={statusDialog?.action === 'reativar' ? 'default' : 'destructive'}
-              onClick={handleStatusChange}
+            
+            <Button 
+              onClick={handleStatusChange} 
+              className="w-full"
+              variant={statusDialog?.action === 'bloquear' ? "destructive" : "default"}
             >
               Confirmar
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Dialog: Conceder Trial */}
-      <Dialog open={!!trialDialog} onOpenChange={() => setTrialDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Conceder Trial</DialogTitle>
-            <DialogDescription>
-              Conceder período de trial para {trialDialog?.nome}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Dias de trial</Label>
-              <Input
-                type="number"
-                min="1"
-                max="90"
-                value={trialDays}
-                onChange={(e) => setTrialDays(e.target.value)}
-              />
-            </div>
           </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTrialDialog(null)}>Cancelar</Button>
-            <Button onClick={handleGrantTrial}>Conceder Trial</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+

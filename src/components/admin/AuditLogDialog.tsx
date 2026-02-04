@@ -17,7 +17,8 @@ import {
   UserMinus,
   ArrowRight
 } from "lucide-react";
-import { Doctor, AuditLog, useAdminStore } from "@/stores/adminStore";
+import { useAdminStore } from "@/stores/adminStore";
+import { Doctor, AuditLog } from "@/types/admin";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 

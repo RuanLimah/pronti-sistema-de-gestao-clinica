@@ -63,6 +63,21 @@ export class SupabasePatientRepository implements PatientRepository {
     return (patients || []).map(p => this.mapToEntity(p));
   }
 
+  async findById(id: string): Promise<Patient | null> {
+    const { data: patient, error } = await supabase
+      .from('patients')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      throw new Error(`Error finding patient: ${error.message}`);
+    }
+
+    return this.mapToEntity(patient);
+  }
+
   async deactivate(id: string): Promise<void> {
     const { error } = await supabase
       .from('patients')

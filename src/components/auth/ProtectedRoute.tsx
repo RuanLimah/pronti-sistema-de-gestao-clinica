@@ -8,26 +8,29 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, user, isLoading } = useAuthStore();
+  const { isAuthenticated, user, isLoading, isInitialized } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    // Só redireciona se já tiver inicializado e não estiver autenticado
+    if (isInitialized && !isLoading && !isAuthenticated) {
       navigate('/login', { state: { from: location }, replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate, location]);
+  }, [isAuthenticated, isLoading, isInitialized, navigate, location]);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && requiredRole && user?.tipo !== requiredRole) {
+    // Verificação de role apenas se autenticado e inicializado
+    if (isInitialized && !isLoading && isAuthenticated && requiredRole && user?.tipo !== requiredRole) {
       // Se requer admin e usuário é médico, redireciona para dashboard
       if (requiredRole === 'admin' && user?.tipo === 'medico') {
         navigate('/', { replace: true });
       }
     }
-  }, [isAuthenticated, isLoading, requiredRole, user, navigate]);
+  }, [isAuthenticated, isLoading, isInitialized, requiredRole, user, navigate]);
 
-  if (isLoading) {
+  // Bloqueia renderização enquanto carrega ou não inicializou
+  if (!isInitialized || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Carregando...</div>

@@ -376,16 +376,6 @@ export default function Login() {
                   </button>
                 </div>
               </form>
-
-              {/* Demo credentials */}
-              <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm font-medium mb-2">Credenciais de demonstração:</p>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <p><strong>Admin:</strong> admin@pronti.com / admin123</p>
-                  <p><strong>Profissional:</strong> dra.ana@pronti.com / ana123</p>
-                  <p><strong>Básico:</strong> dr.carlos@pronti.com / carlos123</p>
-                </div>
-              </div>
             </CardContent>
           </Card>
         )}

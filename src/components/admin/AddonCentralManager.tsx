@@ -39,62 +39,45 @@ import {
   Users,
   TrendingUp,
   DollarSign,
-  Check,
-  X,
   Lock,
   AlertCircle,
 } from "lucide-react";
-import { useAddonManagerStore, GlobalAddon, AddonSystemStatus } from "@/stores/addonManagerStore";
-import { useClientStore } from "@/stores/clientStore";
-import { ADDONS, AddonType } from "@/types/plans";
+import { useAdminStore } from "@/stores/adminStore";
+import { Addon } from "@/types/admin";
 import { useToast } from "@/hooks/use-toast";
 
-const addonIcons: Record<AddonType, React.ReactNode> = {
+const addonIcons: Record<string, React.ReactNode> = {
   whatsapp_avancado: <MessageSquare className="h-5 w-5" />,
   armazenamento_extra: <HardDrive className="h-5 w-5" />,
   relatorios_avancados: <BarChart3 className="h-5 w-5" />,
-};
-
-const statusLabels: Record<AddonSystemStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  disponivel: { label: "Disponível", variant: "outline" },
-  ativo: { label: "Ativo", variant: "default" },
-  inativo: { label: "Inativo", variant: "secondary" },
-  bloqueado_por_plano: { label: "Bloqueado", variant: "destructive" },
-  manutencao: { label: "Manutenção", variant: "secondary" },
+  // Fallback icon
+  default: <Zap className="h-5 w-5" />,
 };
 
 export function AddonCentralManager() {
   const { toast } = useToast();
   const {
-    getAllAddons,
-    getAddonsUsageStats,
-    setAddonGlobalStatus,
-    updateAddonPricing,
-    getAllClientAddons,
-    activateAddon,
-    deactivateAddon,
-  } = useAddonManagerStore();
+    addons,
+    doctors: clients,
+    updateAddon,
+    toggleDoctorAddon,
+  } = useAdminStore();
   
-  const { getAllClients, getClient } = useClientStore();
-  
-  const [selectedAddon, setSelectedAddon] = useState<GlobalAddon | null>(null);
+  const [selectedAddon, setSelectedAddon] = useState<Addon | null>(null);
   const [editPriceDialog, setEditPriceDialog] = useState(false);
   const [newPrice, setNewPrice] = useState("");
-  const [clientAddonDialog, setClientAddonDialog] = useState<{ clienteId: string; addonType: AddonType } | null>(null);
   
-  const addons = getAllAddons();
-  const stats = getAddonsUsageStats();
-  const clients = getAllClients();
-  
-  const handleToggleGlobalStatus = (addonType: AddonType, currentStatus: boolean) => {
-    setAddonGlobalStatus(addonType, !currentStatus);
+  const handleToggleGlobalStatus = async (addon: Addon) => {
+    const updatedAddon = { ...addon, ativo: !addon.ativo };
+    await updateAddon(updatedAddon);
+    
     toast({
-      title: !currentStatus ? "Add-on ativado" : "Add-on desativado",
-      description: `O add-on foi ${!currentStatus ? 'ativado' : 'desativado'} globalmente.`,
+      title: updatedAddon.ativo ? "Add-on ativado" : "Add-on desativado",
+      description: `O add-on foi ${updatedAddon.ativo ? 'ativado' : 'desativado'} globalmente.`,
     });
   };
   
-  const handleUpdatePrice = () => {
+  const handleUpdatePrice = async () => {
     if (!selectedAddon || !newPrice) return;
     
     const valor = parseFloat(newPrice.replace(",", "."));
@@ -107,7 +90,9 @@ export function AddonCentralManager() {
       return;
     }
     
-    updateAddonPricing(selectedAddon.tipo, valor);
+    const updatedAddon = { ...selectedAddon, valor };
+    await updateAddon(updatedAddon);
+    
     toast({
       title: "Preço atualizado",
       description: `Novo valor: R$ ${valor.toFixed(2)}`,
@@ -117,27 +102,35 @@ export function AddonCentralManager() {
     setNewPrice("");
   };
   
-  const handleToggleClientAddon = (clienteId: string, addonType: AddonType, ativar: boolean) => {
-    if (ativar) {
-      activateAddon(clienteId, addonType, "admin-1", "Administrador");
-    } else {
-      deactivateAddon(clienteId, addonType, "admin-1", "Administrador");
-    }
+  const handleToggleClientAddon = async (clienteId: string, addonSlug: string, ativar: boolean) => {
+    await toggleDoctorAddon(clienteId, addonSlug, ativar);
     
-    const client = getClient(clienteId);
+    const client = clients.find(c => c.id === clienteId);
+    const addon = addons.find(a => a.slug === addonSlug);
+    
     toast({
       title: ativar ? "Add-on ativado" : "Add-on desativado",
-      description: `${ADDONS[addonType].nome} ${ativar ? 'ativado' : 'desativado'} para ${client?.nome || 'cliente'}`,
+      description: `${addon?.nome || addonSlug} ${ativar ? 'ativado' : 'desativado'} para ${client?.nome || 'cliente'}`,
     });
   };
   
   // Calcular métricas
-  const totalRevenue = stats.reduce((sum, s) => {
-    const addon = addons.find(a => a.tipo === s.addonType);
-    return sum + (s.totalAtivos * (addon?.valor || 0));
+  const totalRevenue = clients.reduce((sum, client) => {
+    if (client.status !== 'ativo') return sum;
+    const clientRevenue = (client.addons || []).reduce((acc, slug) => {
+      const addon = addons.find(a => a.slug === slug);
+      return acc + (addon?.valor || 0);
+    }, 0);
+    return sum + clientRevenue;
   }, 0);
   
-  const totalActiveAddons = stats.reduce((sum, s) => sum + s.totalAtivos, 0);
+  const totalActiveAddons = clients.reduce((sum, client) => sum + (client.addons?.length || 0), 0);
+
+  // Stats per addon
+  const addonStats = addons.map(addon => ({
+    ...addon,
+    totalAtivos: clients.filter(c => c.addons?.includes(addon.slug)).length
+  }));
   
   return (
     <div className="space-y-6">
@@ -183,7 +176,7 @@ export function AddonCentralManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {clients.length > 0 ? Math.round((totalActiveAddons / (clients.length * addons.length)) * 100) : 0}%
+              {clients.length > 0 && addons.length > 0 ? Math.round((totalActiveAddons / (clients.length * addons.length)) * 100) : 0}%
             </div>
             <p className="text-xs text-muted-foreground">Média de adesão</p>
           </CardContent>
@@ -214,16 +207,16 @@ export function AddonCentralManager() {
             <CardContent>
               <div className="space-y-4">
                 {addons.map((addon) => {
-                  const stat = stats.find(s => s.addonType === addon.tipo);
+                  const stat = addonStats.find(s => s.slug === addon.slug);
                   
                   return (
                     <div
-                      key={addon.tipo}
+                      key={addon.id}
                       className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center gap-4">
                         <div className={`p-3 rounded-lg ${addon.ativo ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                          {addonIcons[addon.tipo]}
+                          {addonIcons[addon.slug] || addonIcons.default}
                         </div>
                         <div>
                           <h4 className="font-medium">{addon.nome}</h4>
@@ -233,7 +226,7 @@ export function AddonCentralManager() {
                               {stat?.totalAtivos || 0} ativos
                             </Badge>
                             <Badge variant="secondary">
-                              Planos: {addon.planosDisponiveis.join(', ')}
+                              {addon.categoria}
                             </Badge>
                           </div>
                         </div>
@@ -261,7 +254,7 @@ export function AddonCentralManager() {
                           </span>
                           <Switch
                             checked={addon.ativo}
-                            onCheckedChange={() => handleToggleGlobalStatus(addon.tipo, addon.ativo)}
+                            onCheckedChange={() => handleToggleGlobalStatus(addon)}
                           />
                         </div>
                       </div>
@@ -289,9 +282,9 @@ export function AddonCentralManager() {
                     <TableHead>Cliente</TableHead>
                     <TableHead>Plano</TableHead>
                     {addons.map(addon => (
-                      <TableHead key={addon.tipo} className="text-center">
+                      <TableHead key={addon.id} className="text-center">
                         <div className="flex flex-col items-center gap-1">
-                          {addonIcons[addon.tipo]}
+                          {addonIcons[addon.slug] || addonIcons.default}
                           <span className="text-xs">{addon.nome.split(' ')[0]}</span>
                         </div>
                       </TableHead>
@@ -300,8 +293,6 @@ export function AddonCentralManager() {
                 </TableHeader>
                 <TableBody>
                   {clients.map(client => {
-                    const clientAddons = getAllClientAddons(client.id);
-                    
                     return (
                       <TableRow key={client.id}>
                         <TableCell>
@@ -311,33 +302,28 @@ export function AddonCentralManager() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{client.planoAtual}</Badge>
+                          <Badge variant="outline">{client.plano}</Badge>
                         </TableCell>
                         {addons.map(addon => {
-                          const clientAddon = clientAddons.find(ca => ca.addonType === addon.tipo);
-                          const status = clientAddon?.status || 'disponivel';
-                          const isBlocked = status === 'bloqueado_por_plano';
-                          const isActive = status === 'ativo';
+                          const isActive = client.addons?.includes(addon.slug);
+                          const isBlocked = !addon.ativo; // If globally inactive, maybe block? Or just show inactive?
+                          
+                          // Logic: if addon is globally inactive, you might not be able to enable it for clients.
+                          // But for now, let's assume global active controls visibility/new sales, but existing might stay?
+                          // Let's assume if globally inactive, we can still toggle for existing?
+                          // Better: if blocked by plan (future feature), show lock.
                           
                           return (
-                            <TableCell key={addon.tipo} className="text-center">
-                              {isBlocked ? (
-                                <div className="flex justify-center">
-                                  <Badge variant="destructive" className="gap-1">
-                                    <Lock className="h-3 w-3" />
-                                    Bloqueado
-                                  </Badge>
-                                </div>
-                              ) : (
-                                <div className="flex justify-center">
-                                  <Switch
-                                    checked={isActive}
-                                    onCheckedChange={(checked) => 
-                                      handleToggleClientAddon(client.id, addon.tipo, checked)
-                                    }
-                                  />
-                                </div>
-                              )}
+                            <TableCell key={addon.id} className="text-center">
+                              {/* Future: check plan restrictions */}
+                              <div className="flex justify-center">
+                                <Switch
+                                  checked={isActive}
+                                  onCheckedChange={(checked) => 
+                                    handleToggleClientAddon(client.id, addon.slug, checked)
+                                  }
+                                />
+                              </div>
                             </TableCell>
                           );
                         })}

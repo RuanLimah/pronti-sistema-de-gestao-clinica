@@ -8,7 +8,7 @@ begin
   -- Only create Profile, let frontend handle Client creation
   -- We keep profile creation as it might be used by other parts of the system
   insert into public.profiles (id, email, full_name, role)
-  values (new.id, new.email, new.raw_user_meta_data->>'full_name', 'client');
+  values (new.id, new.email, new.raw_user_meta_data->>'full_name', 'user');
   
   return new;
 end;

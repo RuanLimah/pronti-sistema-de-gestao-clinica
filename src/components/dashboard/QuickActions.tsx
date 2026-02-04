@@ -114,7 +114,7 @@ export function QuickActions() {
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!medicoId) return;
 
     switch (currentAction) {
@@ -129,7 +129,7 @@ export function QuickActions() {
         }
         
         const paciente = pacientes.find(p => p.id === selectedPaciente);
-        const result = addAtendimento({
+        const result = await addAtendimento({
           pacienteId: selectedPaciente,
           medicoId,
           data: new Date(formData.data),
@@ -148,6 +148,7 @@ export function QuickActions() {
             title: "Erro ao agendar",
             description: result.error || "Não foi possível agendar o atendimento.",
             variant: "destructive",
+            duration: 5000
           });
           return;
         }
@@ -162,19 +163,29 @@ export function QuickActions() {
           });
           return;
         }
-        addPaciente({
-          medicoId,
-          nome: formData.nome,
-          telefone: formData.telefone,
-          email: formData.email || undefined,
-          status: 'ativo',
-          valorConsulta: 200,
-        });
-        toast({
-          title: "Sucesso",
-          description: "Paciente cadastrado com sucesso!",
-        });
-        navigate("/pacientes");
+        try {
+          await addPaciente({
+            medicoId,
+            nome: formData.nome,
+            telefone: formData.telefone,
+            email: formData.email || undefined,
+            status: 'ativo',
+            valorConsulta: 200,
+          });
+          toast({
+            title: "Sucesso",
+            description: "Paciente cadastrado com sucesso!",
+          });
+          navigate("/pacientes");
+        } catch (error) {
+          console.error("Erro ao cadastrar paciente:", error);
+          toast({
+            title: "Erro",
+            description: "Não foi possível cadastrar o paciente.",
+            variant: "destructive",
+          });
+          return;
+        }
         break;
 
       case "enviar-lembrete":
@@ -205,19 +216,29 @@ export function QuickActions() {
           });
           return;
         }
-        addPagamento({
-          pacienteId: selectedPaciente,
-          atendimentoId: selectedAtendimento || undefined,
-          valor: parseFloat(formData.valor),
-          formaPagamento: formData.formaPagamento,
-          status: 'pendente',
-          data: new Date(),
-        });
-        toast({
-          title: "Sucesso",
-          description: "Pagamento registrado com sucesso!",
-        });
-        navigate("/financeiro");
+        try {
+          await addPagamento({
+            pacienteId: selectedPaciente,
+            atendimentoId: selectedAtendimento || undefined,
+            valor: parseFloat(formData.valor),
+            formaPagamento: formData.formaPagamento,
+            status: 'pendente',
+            data: new Date(),
+          });
+          toast({
+            title: "Sucesso",
+            description: "Pagamento registrado com sucesso!",
+          });
+          navigate("/financeiro");
+        } catch (error) {
+          console.error("Erro ao registrar pagamento:", error);
+          toast({
+            title: "Erro",
+            description: "Não foi possível registrar o pagamento.",
+            variant: "destructive",
+          });
+          return;
+        }
         break;
     }
 
