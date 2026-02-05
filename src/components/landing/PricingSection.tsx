@@ -66,20 +66,16 @@ export function PricingSection() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data: plansData } = await supabase
-          .from('plans')
-          .select('*')
-          .eq('active', true)
-          .order('price', { ascending: true });
+        const [plansResponse, addonsResponse] = await Promise.all([
+          supabase.from('plans').select('*').order('price', { ascending: true }),
+          supabase.from('addons').select('*').eq('active', true).order('price', { ascending: true })
+        ]);
 
-        const { data: addonsData } = await supabase
-          .from('addons')
-          .select('*')
-          .eq('active', true)
-          .order('price', { ascending: true });
+        if (plansResponse.error) throw plansResponse.error;
+        if (addonsResponse.error) throw addonsResponse.error;
 
-        if (plansData) setPlans(plansData);
-        if (addonsData) setAddons(addonsData);
+        setPlans(plansResponse.data as any[] || []);
+        setAddons(addonsResponse.data as any[] || []);
       } catch (error) {
         console.error('Error fetching pricing:', error);
       } finally {

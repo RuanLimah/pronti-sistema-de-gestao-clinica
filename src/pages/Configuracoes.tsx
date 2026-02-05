@@ -23,7 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  User,
+  User as UserIcon,
   Lock,
   Bell,
   Clock,
@@ -36,10 +36,12 @@ import {
 } from "lucide-react";
 import { useDataStore, Configuracoes as ConfigType } from "@/stores/dataStore";
 import { useAuthStore } from "@/stores/authStore";
+import type { User } from "@/types/user";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 export default function Configuracoes() {
-  const { user } = useAuthStore();
+  const { user, updateProfile } = useAuthStore();
   const { 
     getConfiguracoesByMedico, 
     initConfiguracoes, 
@@ -57,6 +59,7 @@ export default function Configuracoes() {
   const [perfilCrp, setPerfilCrp] = useState("");
   const [perfilTelefone, setPerfilTelefone] = useState("");
   const [perfilEspecialidades, setPerfilEspecialidades] = useState("");
+  const [perfilTipo, setPerfilTipo] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [perfilSaving, setPerfilSaving] = useState(false);
 
@@ -87,11 +90,13 @@ export default function Configuracoes() {
       // Carregar dados do perfil
       setPerfilNome(user.nome || "");
       setPerfilEmail(user.email || "");
-      setPerfilCrp((user as any).crp || "");
-      setPerfilTelefone((user as any).telefone || "");
-      setPerfilEspecialidades((user as any).especialidades || "");
+      setPerfilCrp(user.crp || "");
+      setPerfilTelefone(user.telefone || "");
+      setPerfilEspecialidades(user.especialidades || "");
+      setPerfilTipo(user.tipoProfissional || "");
+      if (user.foto) setAvatarUrl(user.foto);
     }
-  }, [user?.id]);
+  }, [user?.id, user]);
 
   const pacientes = user?.id ? getPacientesByMedico(user.id) : [];
 
@@ -100,12 +105,25 @@ export default function Configuracoes() {
     
     setPerfilSaving(true);
     try {
-      // Aqui salvaria no backend - por enquanto apenas simula
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await updateProfile({
+        nome: perfilNome,
+        email: perfilEmail,
+        crp: perfilCrp,
+        telefone: perfilTelefone,
+        especialidades: perfilEspecialidades,
+        tipoProfissional: perfilTipo as User['tipoProfissional'],
+        foto: avatarUrl
+      });
       
       toast({
         title: "Perfil salvo",
         description: "Suas informações foram atualizadas com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível atualizar o perfil.",
+        variant: "destructive"
       });
     } finally {
       setPerfilSaving(false);
@@ -145,9 +163,10 @@ export default function Configuracoes() {
     });
   };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!user?.id) return;
 
     // Validar tamanho (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
@@ -169,21 +188,38 @@ export default function Configuracoes() {
       return;
     }
 
-    // Converter para base64 e salvar
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      setAvatarUrl(base64);
-      
-      if (user?.id) {
-        updateConfiguracoes(user.id, { avatarUrl: base64 });
-        toast({
-          title: "Foto atualizada",
-          description: "Sua foto de perfil foi alterada.",
-        });
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+       const fileExt = file.name.split('.').pop();
+       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+       const filePath = `${fileName}`;
+
+       const { error: uploadError } = await supabase.storage
+         .from('avatars')
+         .upload(filePath, file);
+
+       if (uploadError) throw uploadError;
+
+       const { data: { publicUrl } } = supabase.storage
+         .from('avatars')
+         .getPublicUrl(filePath);
+
+       setAvatarUrl(publicUrl);
+       
+       // Update profile with new avatar URL immediately
+       updateProfile({ foto: publicUrl });
+       
+       toast({
+         title: "Foto atualizada",
+         description: "Sua foto de perfil foi alterada.",
+       });
+    } catch (error) {
+       console.error("Error uploading avatar:", error);
+       toast({
+         title: "Erro no upload",
+         description: "Não foi possível enviar a imagem. Tente novamente.",
+         variant: "destructive",
+       });
+    }
   };
 
   const handleSaveValorPaciente = () => {
@@ -226,7 +262,7 @@ export default function Configuracoes() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
+              <UserIcon className="h-5 w-5 text-primary" />
               <CardTitle className="text-lg">Perfil Profissional</CardTitle>
             </div>
             <CardDescription>
@@ -273,6 +309,20 @@ export default function Configuracoes() {
                   onChange={(e) => setPerfilNome(e.target.value)}
                   placeholder="Seu nome completo"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo de Profissional</Label>
+                <Select value={perfilTipo} onValueChange={setPerfilTipo}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Psicólogo">Psicólogo</SelectItem>
+                    <SelectItem value="Dentista">Dentista</SelectItem>
+                    <SelectItem value="Médico">Médico</SelectItem>
+                    <SelectItem value="Outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>CRP</Label>

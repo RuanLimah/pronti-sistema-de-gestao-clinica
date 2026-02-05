@@ -10,19 +10,7 @@ export type PaymentStatus = 'pendente' | 'pago' | 'cancelado';
 export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro' | 'transferencia';
 export type NotificationType = 'agendamento' | 'cancelamento' | 'pagamento' | 'plano' | 'sistema';
 
-// Usuário
-export interface User {
-  id: string;
-  nome: string;
-  email: string;
-  tipo: UserRole;
-  status: UserStatus;
-  foto?: string;
-  crp?: string;
-  telefone?: string;
-  criadoEm: Date;
-  atualizadoEm?: Date;
-}
+// Usuário - Moved to ./user.ts
 
 // Plano
 export interface Plan {

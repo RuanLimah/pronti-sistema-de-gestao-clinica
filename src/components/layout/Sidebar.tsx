@@ -14,6 +14,7 @@ import {
   Brain,
   Bell,
   Shield,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ const menuItems = [
 
 const bottomMenuItems = [
   { icon: Bell, label: "Notificações", path: "/notificacoes" },
+  { icon: CreditCard, label: "Assinatura", path: "/assinatura" },
   { icon: Settings, label: "Configurações", path: "/configuracoes" },
 ];
 

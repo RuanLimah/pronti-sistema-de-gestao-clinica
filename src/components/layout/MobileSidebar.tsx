@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Calendar,
@@ -9,9 +9,12 @@ import {
   Settings,
   LogOut,
   Brain,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useAuthStore } from "@/stores/authStore";
+import { toast } from "@/hooks/use-toast";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -23,6 +26,7 @@ const menuItems = [
 ];
 
 const bottomMenuItems = [
+  { icon: CreditCard, label: "Assinatura", path: "/assinatura" },
   { icon: Settings, label: "Configurações", path: "/configuracoes" },
 ];
 
@@ -33,9 +37,29 @@ interface MobileSidebarProps {
 
 export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuthStore();
 
   const handleLinkClick = () => {
     onOpenChange(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      onOpenChange(false);
+      navigate("/login");
+      toast({
+        title: "Saiu com sucesso",
+        description: "Você foi desconectado do sistema.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao sair",
+        description: "Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -92,6 +116,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
             </Link>
           ))}
           <button
+            onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
             <LogOut className="h-5 w-5 shrink-0" />

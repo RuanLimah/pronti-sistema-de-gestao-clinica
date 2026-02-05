@@ -10,6 +10,8 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Agenda from "./pages/Agenda";
 import Pacientes from "./pages/Pacientes";
@@ -17,7 +19,16 @@ import Financeiro from "./pages/Financeiro";
 import WhatsApp from "./pages/WhatsApp";
 import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
+import Assinatura from "./pages/Assinatura";
 import Notificacoes from "./pages/Notificacoes";
+import { AdminRoute } from "./admin/components/AdminRoute";
+import { AdminLayout } from "./admin/components/AdminLayout";
+import { AdminDashboard } from "./admin/pages/AdminDashboard";
+import { AdminClients } from "./admin/pages/AdminClients";
+import { AdminPlans } from "./admin/pages/AdminPlans";
+import { AdminAddons } from "./admin/pages/AdminAddons";
+import { AdminAudit } from "./admin/pages/AdminAudit";
+
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Prontuario from "./pages/pacientes/prontuario";
@@ -64,7 +75,9 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           
           {/* Pública */}
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Dashboard (protegida) */}
           <Route
@@ -137,7 +150,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
+          <Route
+            path="/assinatura"
+            element={
+              <ProtectedRoute>
+                <Assinatura />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/notificacoes"
             element={
@@ -147,14 +167,16 @@ export default function App() {
             }
           />
 
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <Admin />
-              </ProtectedRoute>
-            }
-          />
+          {/* Admin Area (Isolated) */}
+          <Route element={<AdminRoute />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="clientes" element={<AdminClients />} />
+              <Route path="planos" element={<AdminPlans />} />
+              <Route path="addons" element={<AdminAddons />} />
+              <Route path="auditoria" element={<AdminAudit />} />
+            </Route>
+          </Route>
 
           {/* 404 */}
           <Route path="*" element={<NotFound />} />

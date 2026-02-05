@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Access environment variables using Vite's import.meta.env
-// TODO: Revert to using import.meta.env once the environment cache is cleared
-const supabaseUrl = 'https://qjvijqskzqyzgxgchllz.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqdmlqcXNrenF5emd4Z2NobGx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2NDM3NjAsImV4cCI6MjA4NTIxOTc2MH0.jGvO6mS7FLAxgR66A9sBDS7IMn5fjwo-_q9hN4P1Ybg';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing env vars:', { supabaseUrl, supabaseAnonKey });
   throw new Error('Supabase env vars missing');
 }
 
